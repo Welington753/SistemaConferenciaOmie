@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_LastSelectedProfileId>C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\Properties\PublishProfiles\FolderProfile.pubxml</_LastSelectedProfileId>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="FrmConferencia.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FrmPreparacaoPedidos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FrmValidacaoEan.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+</Project>
