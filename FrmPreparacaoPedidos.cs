@@ -58,6 +58,8 @@ namespace SistemaConferenciaPedidos
         public FrmPreparacaoPedidos()
         {
             InitializeComponent();
+
+            KeyPreview = true;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -244,6 +246,8 @@ namespace SistemaConferenciaPedidos
             dgvItensPedido.AllowUserToAddRows = false;
             dgvItensPedido.AllowUserToDeleteRows = false;
             dgvItensPedido.AllowUserToResizeRows = false;
+            dgvPedidos.SelectionChanged += dgvPedidos_SelectionChanged;
+            dgvPedidos.KeyDown += dgvPedidos_KeyDown;
         }
 
 
@@ -859,6 +863,7 @@ namespace SistemaConferenciaPedidos
                 _pedidoRepository.SalvarOuAtualizar(_pedidoSelecionado);
 
                 CarregarPedidos(numeroPedidoAtual);
+                SelecionarProximoPedidoNaoImpresso();
             }
             catch (Exception ex)
             {
@@ -1139,7 +1144,21 @@ namespace SistemaConferenciaPedidos
                 }
             }
         }
+        private async Task SelecionarPedidoAsync(PedidoConferencia pedido)
+        {
+            if (pedido == null)
+                return;
 
+            _pedidoSelecionado = pedido;
+            _jsonPedidoSelecionado = pedido.JsonItens ?? "[]";
+
+            txtCliente.Text = pedido.NomeCliente;
+            txtPedidoCliente.Text = pedido.NumeroPedidoCliente;
+            txtMarketplace.Text = pedido.Marketplace;
+            txtCodigoEtiqueta.Text = pedido.CodigoEtiqueta ?? "";
+
+            await CarregarItensDoPedidoAsync(pedido.JsonItens);
+        }
         private async void dgvPedidos_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (_carregandoPedidos)
@@ -1148,21 +1167,10 @@ namespace SistemaConferenciaPedidos
             if (e.RowIndex < 0)
                 return;
 
-            var pedido = dgvPedidos.Rows[e.RowIndex].DataBoundItem as PedidoConferencia;
-            if (pedido == null)
+            if (dgvPedidos.Rows[e.RowIndex].DataBoundItem is not PedidoConferencia pedido)
                 return;
 
-            _pedidoSelecionado = pedido;
-            _jsonPedidoSelecionado = pedido.JsonItens ?? "[]";
-
-
-            txtCliente.Text = pedido.NomeCliente;
-            txtPedidoCliente.Text = pedido.NumeroPedidoCliente;
-            txtMarketplace.Text = pedido.Marketplace;
-            txtCodigoEtiqueta.Text = pedido.CodigoEtiqueta ?? "";
-
-            await CarregarItensDoPedidoAsync(pedido.JsonItens);
-
+            await SelecionarPedidoAsync(pedido);
         }
 
         private async Task CarregarItensDoPedidoAsync(string jsonPedido)
@@ -1251,9 +1259,17 @@ namespace SistemaConferenciaPedidos
 
                 var pedidosImportados = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal);
 
+                var pedidosMarketplace = pedidosImportados
+                    .Where(PedidoEhDeMarketplaceValido)
+                    .ToList();
+
+                var pedidosOutrosCanais = pedidosImportados
+                    .Where(p => !PedidoEhDeMarketplaceValido(p))
+                    .ToList();
+
                 _pedidoRepository.Limpar();
 
-                _pedidoRepository.SalvarOuAtualizarVarios(pedidosImportados);
+                _pedidoRepository.SalvarOuAtualizarVarios(pedidosMarketplace);
 
                 _pedidoSelecionado = null;
                 _jsonPedidoSelecionado = "[]";
@@ -1266,9 +1282,14 @@ namespace SistemaConferenciaPedidos
                 CarregarPedidos();
 
                 MessageBox.Show(
-                    $"Busca concluída.\n" +
-                    $"Período: {dataInicial:dd/MM/yyyy} até {dataFinal:dd/MM/yyyy}\n" +
-                    $"Pedidos encontrados: {pedidosImportados.Count}");
+                    $"Busca concluída.\n\n" +
+                    $"Período: {dataInicial:dd/MM/yyyy} até {dataFinal:dd/MM/yyyy}\n\n" +
+                    $"Pedidos para preparação:\n" +
+                    $"Amazon / Shopee / Mercado Livre: {pedidosMarketplace.Count}\n\n" +
+                    $"Pedidos de outros canais ignorados: {pedidosOutrosCanais.Count}",
+                    "Buscar pedidos",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -1291,12 +1312,22 @@ namespace SistemaConferenciaPedidos
 
                 var pedidosOmie = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal);
 
+                var pedidosMarketplace = pedidosOmie
+                    .Where(PedidoEhDeMarketplaceValido)
+                    .ToList();
+
+                var pedidosIgnorados = pedidosOmie
+                    .Where(p => !PedidoEhDeMarketplaceValido(p))
+                    .ToList();
+
                 int novos = 0;
                 int atualizados = 0;
 
-                foreach (var pedido in pedidosOmie)
+                var pedidosExistentes = _pedidoRepository.ObterTodos();
+
+                foreach (var pedido in pedidosMarketplace)
                 {
-                    var existente = _pedidoRepository.ObterTodos().FirstOrDefault(p =>
+                    var existente = pedidosExistentes.FirstOrDefault(p =>
                         string.Equals(
                             (p.NumeroPedidoCliente ?? "").Trim(),
                             (pedido.NumeroPedidoCliente ?? "").Trim(),
@@ -1310,10 +1341,13 @@ namespace SistemaConferenciaPedidos
                     _pedidoRepository.SalvarOuAtualizarPreservandoStatus(pedido);
                 }
 
-                CarregarPedidos(); // atualiza a grid
+                CarregarPedidos();
 
                 MessageBox.Show(
-                    $"Atualização concluída!\n\nNovos pedidos: {novos}\nAtualizados: {atualizados}",
+                    $"Atualização concluída!\n\n" +
+                    $"Novos pedidos: {novos}\n" +
+                    $"Atualizados: {atualizados}\n" +
+                    $"Ignorados por não serem Amazon/Shopee/Mercado Livre: {pedidosIgnorados.Count}",
                     "Atualizar pedidos",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -1335,19 +1369,110 @@ namespace SistemaConferenciaPedidos
 
         private void btnImprimirPorProduto_Click(object sender, EventArgs e)
         {
-            using var frm = new FrmBuscarPedidoPorProduto();
+            using var frm = new FrmBuscarPedidoPorProduto(ImprimirPedidoEncontradoPorProduto);
+            frm.ShowDialog();
 
-            if (frm.ShowDialog() != DialogResult.OK)
+            CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
+        }
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.F2:
+
+                    if (btnImprimirEtiqueta.Enabled)
+                        btnImprimirEtiqueta.PerformClick();
+
+                    return true;
+
+                case Keys.F4:
+
+                    if (btnImprimirPorProduto.Enabled)
+                        btnImprimirPorProduto.PerformClick();
+
+                    return true;
+
+                case Keys.F5:
+
+                    if (btnAtualizarPedidos.Enabled)
+                        btnAtualizarPedidos.PerformClick();
+
+                    return true;
+
+                case Keys.F8:
+
+                    if (btnGerarEtiqueta.Enabled)
+                        btnGerarEtiqueta.PerformClick();
+
+                    return true;
+
+                case Keys.Escape:
+
+                    dgvPedidos.ClearSelection();
+
+                    return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+        private async void dgvPedidos_SelectionChanged(object sender, EventArgs e)
+        {
+            if (_carregandoPedidos)
                 return;
 
-            var pedido = frm.PedidoSelecionado;
+            if (dgvPedidos.CurrentRow == null)
+                return;
 
+            if (dgvPedidos.CurrentRow.DataBoundItem is not PedidoConferencia pedido)
+                return;
+
+            await SelecionarPedidoAsync(pedido);
+        }
+        private void dgvPedidos_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+
+                if (_pedidoSelecionado != null)
+                {
+                    ImprimirPedidoSelecionado();
+                }
+            }
+        }
+        private async void SelecionarProximoPedidoNaoImpresso()
+        {
+            if (dgvPedidos.Rows.Count == 0)
+                return;
+
+            foreach (DataGridViewRow row in dgvPedidos.Rows)
+            {
+                if (row.DataBoundItem is not PedidoConferencia pedido)
+                    continue;
+
+                if (pedido.Impresso)
+                    continue;
+
+                dgvPedidos.ClearSelection();
+
+                row.Selected = true;
+                dgvPedidos.CurrentCell = row.Cells[1];
+
+                await SelecionarPedidoAsync(pedido);
+
+                return;
+            }
+        }
+        private void ImprimirPedidoEncontradoPorProduto(PedidoConferencia pedido)
+        {
             if (pedido == null)
                 return;
 
             _pedidoSelecionado = pedido;
 
             ImprimirPedidoSelecionado();
+
+            CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
         }
     }
 }

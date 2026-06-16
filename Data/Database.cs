@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS Pedidos (
     EtiquetaMarketplaceZpl TEXT,
     Impresso INTEGER NOT NULL DEFAULT 0,
     Conferido INTEGER NOT NULL DEFAULT 0,
-    DataCriacao TEXT,B
+    DataCriacao TEXT,
     DataConferencia TEXT
 );";
 

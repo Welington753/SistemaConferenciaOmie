@@ -10,6 +10,8 @@ namespace SistemaConferenciaPedidos
 {
     public partial class FrmBuscarPedidoPorProduto : Form
     {
+        private readonly Action<PedidoConferencia> _aoConfirmarImpressao;
+
         private readonly PedidoProdutoBuscaService _pedidoProdutoBuscaService =
             new PedidoProdutoBuscaService();
 
@@ -18,9 +20,13 @@ namespace SistemaConferenciaPedidos
 
         public PedidoConferencia PedidoSelecionado { get; private set; }
 
-        public FrmBuscarPedidoPorProduto()
+        public FrmBuscarPedidoPorProduto(Action<PedidoConferencia> aoConfirmarImpressao)
         {
             InitializeComponent();
+
+            KeyPreview = true;
+
+            _aoConfirmarImpressao = aoConfirmarImpressao;
 
             ConfigurarGrid();
 
@@ -28,6 +34,8 @@ namespace SistemaConferenciaPedidos
             btnConfirmarImprimir.Click += btnConfirmarImprimir_Click;
 
             txtCodigoProduto.KeyDown += txtCodigoProduto_KeyDown;
+            dgvResultados.KeyDown += dgvResultados_KeyDown;
+            dgvResultados.CellDoubleClick += dgvResultados_CellDoubleClick;
         }
 
         private void ConfigurarGrid()
@@ -64,8 +72,16 @@ namespace SistemaConferenciaPedidos
         {
             if (e.KeyCode == Keys.Enter)
             {
-                Buscar();
                 e.SuppressKeyPress = true;
+                btnBuscar.PerformClick();
+
+                if (dgvResultados.Rows.Count > 0)
+                {
+                    dgvResultados.Focus();
+                    dgvResultados.ClearSelection();
+                    dgvResultados.Rows[0].Selected = true;
+                    dgvResultados.CurrentCell = dgvResultados.Rows[0].Cells[1];
+                }
             }
         }
 
@@ -100,20 +116,48 @@ namespace SistemaConferenciaPedidos
 
         private void btnConfirmarImprimir_Click(object sender, EventArgs e)
         {
+            ConfirmarPedidoSelecionado();
+        }
+        private void dgvResultados_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.F2)
+            {
+                e.SuppressKeyPress = true;
+                ConfirmarPedidoSelecionado();
+            }
+        }
+
+        private void dgvResultados_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0)
+                ConfirmarPedidoSelecionado();
+        }
+
+        private void ConfirmarPedidoSelecionado()
+        {
             if (dgvResultados.CurrentRow == null)
             {
                 MessageBox.Show("Selecione um pedido.");
                 return;
             }
 
-            PedidoSelecionado =
-                dgvResultados.CurrentRow.DataBoundItem as PedidoConferencia;
+            var pedido = dgvResultados.CurrentRow.DataBoundItem as PedidoConferencia;
 
-            if (PedidoSelecionado == null)
+            if (pedido == null)
                 return;
 
-            DialogResult = DialogResult.OK;
-            Close();
+            _aoConfirmarImpressao?.Invoke(pedido);
+
+            LimparParaNovaBusca();
+        }
+        private void LimparParaNovaBusca()
+        {
+            txtCodigoProduto.Clear();
+
+            dgvResultados.DataSource = null;
+            dgvResultados.Rows.Clear();
+
+            txtCodigoProduto.Focus();
         }
     }
 }

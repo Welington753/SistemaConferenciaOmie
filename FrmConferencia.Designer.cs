@@ -28,6 +28,16 @@
         /// </summary>
         private void InitializeComponent()
         {
+            grpPedidosFaltantes = new GroupBox();
+            grpFaltantesAmazon = new GroupBox();
+            grpFaltantesShopee = new GroupBox();
+            grpFaltantesMl = new GroupBox();
+            lstFaltantesAmazon = new ListBox();
+            lstFaltantesShopee = new ListBox();
+            lstFaltantesMl = new ListBox();
+            grpHistorico = new GroupBox();
+            lstErros = new ListBox();
+            lstSucesso = new ListBox();
             lblTitulo = new Label();
             lblLeitura = new Label();
             txtLeitura = new TextBox();
@@ -40,8 +50,10 @@
             grpHistorico = new GroupBox();
             lstErros = new ListBox();
             lstSucesso = new ListBox();
+     
             grpResumo.SuspendLayout();
             grpHistorico.SuspendLayout();
+            grpPedidosFaltantes.SuspendLayout();
             SuspendLayout();
             // 
             // lblTitulo
@@ -174,13 +186,96 @@
             lstSucesso.Name = "lstSucesso";
             lstSucesso.Size = new Size(310, 208);
             lstSucesso.TabIndex = 0;
+
             // 
+            // grpPedidosFaltantes
+            // 
+            grpPedidosFaltantes.Controls.Add(grpFaltantesAmazon);
+            grpPedidosFaltantes.Controls.Add(grpFaltantesShopee);
+            grpPedidosFaltantes.Controls.Add(grpFaltantesMl);
+            grpPedidosFaltantes.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpPedidosFaltantes.Location = new Point(735, 18);
+            grpPedidosFaltantes.Name = "grpPedidosFaltantes";
+            grpPedidosFaltantes.Size = new Size(500, 636);
+            grpPedidosFaltantes.TabIndex = 6;
+            grpPedidosFaltantes.TabStop = false;
+            grpPedidosFaltantes.Text = "Pedidos faltantes";
+
+            // 
+            // grpFaltantesAmazon
+            // 
+            grpFaltantesAmazon.Controls.Add(lstFaltantesAmazon);
+            grpFaltantesAmazon.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpFaltantesAmazon.Location = new Point(14, 28);
+            grpFaltantesAmazon.Name = "grpFaltantesAmazon";
+            grpFaltantesAmazon.Size = new Size(470, 190);
+            grpFaltantesAmazon.TabIndex = 0;
+            grpFaltantesAmazon.TabStop = false;
+            grpFaltantesAmazon.Text = "Amazon";
+
+            // 
+            // lstFaltantesAmazon
+            // 
+            lstFaltantesAmazon.Font = new Font("Segoe UI", 10F);
+            lstFaltantesAmazon.FormattingEnabled = true;
+            lstFaltantesAmazon.ItemHeight = 17;
+            lstFaltantesAmazon.Location = new Point(10, 25);
+            lstFaltantesAmazon.Name = "lstFaltantesAmazon";
+            lstFaltantesAmazon.Size = new Size(450, 150);
+            lstFaltantesAmazon.TabIndex = 0;
+
+            // 
+            // grpFaltantesShopee
+            // 
+            grpFaltantesShopee.Controls.Add(lstFaltantesShopee);
+            grpFaltantesShopee.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpFaltantesShopee.Location = new Point(14, 225);
+            grpFaltantesShopee.Name = "grpFaltantesShopee";
+            grpFaltantesShopee.Size = new Size(470, 190);
+            grpFaltantesShopee.TabIndex = 1;
+            grpFaltantesShopee.TabStop = false;
+            grpFaltantesShopee.Text = "Shopee";
+
+            // 
+            // lstFaltantesShopee
+            // 
+            lstFaltantesShopee.Font = new Font("Segoe UI", 10F);
+            lstFaltantesShopee.FormattingEnabled = true;
+            lstFaltantesShopee.ItemHeight = 17;
+            lstFaltantesShopee.Location = new Point(10, 25);
+            lstFaltantesShopee.Name = "lstFaltantesShopee";
+            lstFaltantesShopee.Size = new Size(450, 150);
+            lstFaltantesShopee.TabIndex = 0;
+
+            // 
+            // grpFaltantesMl
+            // 
+            grpFaltantesMl.Controls.Add(lstFaltantesMl);
+            grpFaltantesMl.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            grpFaltantesMl.Location = new Point(14, 422);
+            grpFaltantesMl.Name = "grpFaltantesMl";
+            grpFaltantesMl.Size = new Size(470, 190);
+            grpFaltantesMl.TabIndex = 2;
+            grpFaltantesMl.TabStop = false;
+            grpFaltantesMl.Text = "Mercado Livre";
+
+            // 
+            // lstFaltantesMl
+            // 
+            lstFaltantesMl.Font = new Font("Segoe UI", 10F);
+            lstFaltantesMl.FormattingEnabled = true;
+            lstFaltantesMl.ItemHeight = 17;
+            lstFaltantesMl.Location = new Point(10, 25);
+            lstFaltantesMl.Name = "lstFaltantesMl";
+            lstFaltantesMl.Size = new Size(450, 150);
+            lstFaltantesMl.TabIndex = 0;
             // FrmConferencia
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(748, 673);
+            ClientSize = new Size(1260, 673);
             Controls.Add(grpHistorico);
+            Controls.Add(grpPedidosFaltantes);
             Controls.Add(grpResumo);
             Controls.Add(btnConferir);
             Controls.Add(txtLeitura);
@@ -194,6 +289,7 @@
             Text = "Conferência de Pedidos";
             grpResumo.ResumeLayout(false);
             grpHistorico.ResumeLayout(false);
+            grpPedidosFaltantes.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -212,5 +308,13 @@
         private GroupBox grpHistorico;
         private ListBox lstSucesso;
         private ListBox lstErros;
+        private GroupBox grpPedidosFaltantes;
+        private GroupBox grpFaltantesAmazon;
+        private GroupBox grpFaltantesShopee;
+        private GroupBox grpFaltantesMl;
+        private ListBox lstFaltantesAmazon;
+        private ListBox lstFaltantesShopee;
+        private ListBox lstFaltantesMl;
+
     }
 }
