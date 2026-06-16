@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b5c9943c32df63966a7e452c30606f20e5f4af29")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+637c6ceebfff96a0af2cd7ea2452915a8fec3ba6")]
 [assembly: System.Reflection.AssemblyProductAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

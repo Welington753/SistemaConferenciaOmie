@@ -58,6 +58,32 @@ namespace SistemaConferenciaPedidos.Services
                 string.Equals(p.CodigoEtiqueta ?? "", codigo ?? "", StringComparison.OrdinalIgnoreCase));
         }
 
+
+        public static void AdicionarOuAtualizarPreservandoStatus(PedidoConferencia pedidoNovo)
+        {
+            if (pedidoNovo == null)
+                return;
+
+            var existente = pedidos.FirstOrDefault(p =>
+                 string.Equals(
+                    (p.NumeroPedidoCliente ?? "").Trim(),
+                    (pedidoNovo.NumeroPedidoCliente ?? "").Trim(),
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (existente == null)
+            {
+                pedidos.Add(pedidoNovo);
+                return;
+            }
+
+            // Atualiza apenas os dados vindos da Omie
+            existente.NomeCliente = pedidoNovo.NomeCliente;
+            existente.Marketplace = pedidoNovo.Marketplace;
+            existente.JsonItens = pedidoNovo.JsonItens;
+
+           
+        }
+
         public static void MarcarComoConferido(string codigo)
         {
             var pedido = BuscarPorCodigo(codigo);

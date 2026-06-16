@@ -51,6 +51,8 @@
             btnGerarEtiqueta = new Button();
             btnSalvarPedido = new Button();
             btnImprimirEtiqueta = new Button();
+            btnAtualizarPedidos = new Button();
+            btnImprimirPorProduto = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvPedidos).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvItensPedido).BeginInit();
             SuspendLayout();
@@ -161,7 +163,7 @@
             // lblMarketplace
             // 
             lblMarketplace.AutoSize = true;
-            lblMarketplace.Location = new Point(550, 410);
+            lblMarketplace.Location = new Point(510, 410);
             lblMarketplace.Name = "lblMarketplace";
             lblMarketplace.Size = new Size(72, 15);
             lblMarketplace.TabIndex = 11;
@@ -170,7 +172,7 @@
             // lblCodigoEtiqueta
             // 
             lblCodigoEtiqueta.AutoSize = true;
-            lblCodigoEtiqueta.Location = new Point(550, 455);
+            lblCodigoEtiqueta.Location = new Point(510, 455);
             lblCodigoEtiqueta.Name = "lblCodigoEtiqueta";
             lblCodigoEtiqueta.Size = new Size(92, 15);
             lblCodigoEtiqueta.TabIndex = 12;
@@ -194,7 +196,7 @@
             // 
             // txtMarketplace
             // 
-            txtMarketplace.Location = new Point(550, 428);
+            txtMarketplace.Location = new Point(510, 428);
             txtMarketplace.Name = "txtMarketplace";
             txtMarketplace.ReadOnly = true;
             txtMarketplace.Size = new Size(250, 23);
@@ -202,7 +204,7 @@
             // 
             // txtCodigoEtiqueta
             // 
-            txtCodigoEtiqueta.Location = new Point(550, 473);
+            txtCodigoEtiqueta.Location = new Point(510, 473);
             txtCodigoEtiqueta.Name = "txtCodigoEtiqueta";
             txtCodigoEtiqueta.ReadOnly = true;
             txtCodigoEtiqueta.Size = new Size(250, 23);
@@ -228,9 +230,9 @@
             // 
             // btnGerarEtiqueta
             // 
-            btnGerarEtiqueta.Location = new Point(820, 423);
+            btnGerarEtiqueta.Location = new Point(782, 423);
             btnGerarEtiqueta.Name = "btnGerarEtiqueta";
-            btnGerarEtiqueta.Size = new Size(120, 77);
+            btnGerarEtiqueta.Size = new Size(86, 77);
             btnGerarEtiqueta.TabIndex = 19;
             btnGerarEtiqueta.Text = "Conferir";
             btnGerarEtiqueta.UseVisualStyleBackColor = true;
@@ -238,7 +240,7 @@
             // 
             // btnSalvarPedido
             // 
-            btnSalvarPedido.Location = new Point(630, 95);
+            btnSalvarPedido.Location = new Point(820, 95);
             btnSalvarPedido.Name = "btnSalvarPedido";
             btnSalvarPedido.Size = new Size(180, 32);
             btnSalvarPedido.TabIndex = 20;
@@ -248,19 +250,41 @@
             // 
             // btnImprimirEtiqueta
             // 
-            btnImprimirEtiqueta.Location = new Point(947, 423);
+            btnImprimirEtiqueta.Location = new Point(966, 423);
             btnImprimirEtiqueta.Name = "btnImprimirEtiqueta";
-            btnImprimirEtiqueta.Size = new Size(120, 77);
+            btnImprimirEtiqueta.Size = new Size(86, 77);
             btnImprimirEtiqueta.TabIndex = 21;
             btnImprimirEtiqueta.Text = "Imprimir Etiqueta";
             btnImprimirEtiqueta.UseVisualStyleBackColor = true;
             btnImprimirEtiqueta.Click += btnImprimirEtiqueta_Click;
+            // 
+            // btnAtualizarPedidos
+            // 
+            btnAtualizarPedidos.Location = new Point(639, 95);
+            btnAtualizarPedidos.Name = "btnAtualizarPedidos";
+            btnAtualizarPedidos.Size = new Size(150, 32);
+            btnAtualizarPedidos.TabIndex = 22;
+            btnAtualizarPedidos.Text = "Atualizar Pedidos";
+            btnAtualizarPedidos.UseVisualStyleBackColor = true;
+            btnAtualizarPedidos.Click += btnAtualizarPedidos_Click;
+            // 
+            // btnImprimirPorProduto
+            // 
+            btnImprimirPorProduto.Location = new Point(874, 423);
+            btnImprimirPorProduto.Name = "btnImprimirPorProduto";
+            btnImprimirPorProduto.Size = new Size(86, 77);
+            btnImprimirPorProduto.TabIndex = 23;
+            btnImprimirPorProduto.Text = "Imprimir por Produto";
+            btnImprimirPorProduto.UseVisualStyleBackColor = true;
+            btnImprimirPorProduto.Click += btnImprimirPorProduto_Click;
             // 
             // FrmPreparacaoPedidos
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1100, 720);
+            Controls.Add(btnImprimirPorProduto);
+            Controls.Add(btnAtualizarPedidos);
             Controls.Add(btnImprimirEtiqueta);
             Controls.Add(btnSalvarPedido);
             Controls.Add(btnGerarEtiqueta);
@@ -318,5 +342,7 @@
         private System.Windows.Forms.Button btnGerarEtiqueta;
         private System.Windows.Forms.Button btnSalvarPedido;
         private System.Windows.Forms.Button btnImprimirEtiqueta;
+        private Button btnAtualizarPedidos;
+        private Button btnImprimirPorProduto;
     }
 }

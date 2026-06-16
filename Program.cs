@@ -1,3 +1,5 @@
+using SistemaConferenciaPedidos.Data;
+
 namespace SistemaConferenciaPedidos
 {
     internal static class Program
@@ -11,6 +13,7 @@ namespace SistemaConferenciaPedidos
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
+            Database.Inicializar();
             Application.Run(new FrmPreparacaoPedidos());
         }
     }

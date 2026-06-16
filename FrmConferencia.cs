@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using SistemaConferenciaPedidos.Repositories;
 
 namespace SistemaConferenciaPedidos
 {
@@ -16,6 +17,7 @@ namespace SistemaConferenciaPedidos
             InitializeComponent();
         }
 
+        private readonly IPedidoRepository _pedidoRepository = new PedidoRepositorySqlite();
         private readonly ConferenciaService _conferenciaService = new ConferenciaService();
 
         protected override void OnLoad(EventArgs e)
@@ -41,77 +43,68 @@ namespace SistemaConferenciaPedidos
             try
             {
                 bool encontradoPorNumeroPedido;
+
                 var pedido = _conferenciaService.BuscarPedidoPorCodigoOuNumero(
-                 PedidoRepository.ObterTodos(),
-                 textoLido,
-                 out encontradoPorNumeroPedido);
+                    _pedidoRepository.ObterTodos(),
+                    textoLido,
+                    out encontradoPorNumeroPedido);
 
                 if (pedido == null)
                 {
                     string textoHistorico = _conferenciaService.NormalizarNumeroPedido(textoLido);
+
                     if (string.IsNullOrWhiteSpace(textoHistorico))
                         textoHistorico = textoLido.Trim().ToUpperInvariant();
 
-                    lstHistorico.Items.Insert(0, $"❌ NÃO ENCONTRADO: {textoHistorico}");
-
-                    System.Media.SystemSounds.Exclamation.Play();
-                    MessageBox.Show(
-                        "Pedido não encontrado.\n\n" +
-                        "Confira o código de rastreio ou o número do pedido.",
-                        "Divergência",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    lstErros.Items.Insert(0,
+                         $"❌ NÃO ENCONTRADO: {textoHistorico}");
+                    Console.Beep(1500, 1500);
 
                     return;
                 }
 
                 if (pedido.Conferido)
                 {
-                    lstHistorico.Items.Insert(0,
-                        $"🔵 JÁ CONFERIDO: {pedido.NumeroPedidoCliente} | {pedido.NomeCliente}");
+                    lstErros.Items.Insert(0,
+                         $"🔵 JÁ CONFERIDO: {pedido.NumeroPedidoCliente} | {pedido.NomeCliente}");
 
-                    System.Media.SystemSounds.Exclamation.Play();
-                    MessageBox.Show(
-                        "Esse pedido já foi conferido anteriormente.",
-                        "Divergência",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    Console.Beep(1500, 1500);
 
                     return;
                 }
 
                 pedido.Conferido = true;
+                _pedidoRepository.SalvarOuAtualizar(pedido);
 
-                bool temEtiquetaVinculada = !string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta);
+                bool temEtiquetaVinculada =
+                    !string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta);
 
                 if (encontradoPorNumeroPedido && !temEtiquetaVinculada)
                 {
-                    lstHistorico.Items.Insert(0,
+                    lstSucesso.Items.Insert(0,
                         $"✅ CONFERIDO SEM ETIQUETA: {pedido.NumeroPedidoCliente} | {pedido.NomeCliente}");
                 }
                 else if (encontradoPorNumeroPedido)
                 {
-                    lstHistorico.Items.Insert(0,
+                    lstSucesso.Items.Insert(0,
                         $"✅ CONFERIDO POR PEDIDO: {pedido.NumeroPedidoCliente} | {pedido.NomeCliente}");
                 }
                 else
                 {
-                    lstHistorico.Items.Insert(0,
+                    lstSucesso.Items.Insert(0,
                         $"✅ CONFERIDO: {pedido.CodigoEtiqueta} | {pedido.NumeroPedidoCliente} | {pedido.NomeCliente}");
                 }
+
+                
 
                 AtualizarResumoConferencia();
             }
             catch (Exception ex)
             {
-                lstHistorico.Items.Insert(0, $"⚠ ERRO: {ex.Message}");
+                lstErros.Items.Insert(0,
+                    $"⚠ ERRO: {ex.Message}");
 
-                System.Media.SystemSounds.Exclamation.Play();
-                MessageBox.Show(
-                    "Erro ao conferir: " + ex.Message,
-                    "Erro",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                Console.Beep(1500, 1500);
             }
             finally
             {
@@ -121,10 +114,9 @@ namespace SistemaConferenciaPedidos
             }
         }
 
-  
 
-    
-     
+
+
         private string MontarResumoProdutos(string jsonPedido)
         {
             if (string.IsNullOrWhiteSpace(jsonPedido))
@@ -187,7 +179,7 @@ namespace SistemaConferenciaPedidos
 
         private void AtualizarResumoConferencia()
         {
-            var pedidos = PedidoRepository.ObterTodos();
+            var pedidos = _pedidoRepository.ObterTodos();
 
             int totalGeral = pedidos.Count;
             int conferidosGeral = pedidos.Count(p => p.Conferido);
@@ -233,7 +225,7 @@ namespace SistemaConferenciaPedidos
             }
         }
 
- 
+
 
         private void txtLeitura_KeyDown(object sender, KeyEventArgs e)
         {
@@ -242,6 +234,11 @@ namespace SistemaConferenciaPedidos
                 e.SuppressKeyPress = true;
                 btnConferir.PerformClick();
             }
+        }
+
+        private void FrmConferencia_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }

@@ -70,13 +70,25 @@ namespace SistemaConferenciaPedidos
 
         private void ProcessarLeitura()
         {
-            string lido = SomenteNumeros(txtLeitura.Text);
+            string textoOriginal = txtLeitura.Text?.Trim() ?? "";
+            string lido = SomenteNumeros(textoOriginal);
 
             txtLeitura.Clear();
             txtLeitura.Focus();
 
             if (string.IsNullOrWhiteSpace(lido))
                 return;
+
+            // SENHA / CÓDIGO DE LIBERAÇÃO MANUAL
+            if (lido == "0051000012517")
+            {
+                System.Media.SystemSounds.Asterisk.Play();
+                lstHistorico.Items.Insert(0, "🔓 LIBERAÇÃO MANUAL AUTORIZADA");
+
+                DialogResult = DialogResult.OK;
+                Close();
+                return;
+            }
 
             var item = _itens.FirstOrDefault(x => !x.Conferido && x.Ean == lido);
 

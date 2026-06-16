@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "bGfxgur5ZL4=",
+  "dgSpecHash": "Sjjmqg8yEWo=",
   "success": true,
   "projectFilePath": "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos.csproj",
   "expectedPackageFiles": [
@@ -10,6 +10,8 @@
     "C:\\Users\\User\\.nuget\\packages\\harfbuzzsharp.nativeassets.linux\\8.3.1.2\\harfbuzzsharp.nativeassets.linux.8.3.1.2.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\harfbuzzsharp.nativeassets.macos\\8.3.1.2\\harfbuzzsharp.nativeassets.macos.8.3.1.2.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\harfbuzzsharp.nativeassets.win32\\8.3.1.2\\harfbuzzsharp.nativeassets.win32.8.3.1.2.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.data.sqlite\\10.0.7\\microsoft.data.sqlite.10.0.7.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\microsoft.data.sqlite.core\\10.0.7\\microsoft.data.sqlite.core.10.0.7.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.3\\microsoft.extensions.logging.abstractions.8.0.3.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\pdfiumviewer\\2.13.0\\pdfiumviewer.2.13.0.nupkg.sha512",
@@ -22,6 +24,10 @@
     "C:\\Users\\User\\.nuget\\packages\\skiasharp.nativeassets.linux.nodependencies\\3.119.1\\skiasharp.nativeassets.linux.nodependencies.3.119.1.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\skiasharp.nativeassets.macos\\3.119.2\\skiasharp.nativeassets.macos.3.119.2.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\skiasharp.nativeassets.win32\\3.119.2\\skiasharp.nativeassets.win32.3.119.2.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\sqlitepclraw.bundle_e_sqlite3\\2.1.11\\sqlitepclraw.bundle_e_sqlite3.2.1.11.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\sqlitepclraw.core\\2.1.11\\sqlitepclraw.core.2.1.11.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\sqlitepclraw.lib.e_sqlite3\\2.1.11\\sqlitepclraw.lib.e_sqlite3.2.1.11.nupkg.sha512",
+    "C:\\Users\\User\\.nuget\\packages\\sqlitepclraw.provider.e_sqlite3\\2.1.11\\sqlitepclraw.provider.e_sqlite3.2.1.11.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\tesseract\\5.2.0\\tesseract.5.2.0.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\zxing.net\\0.16.11\\zxing.net.0.16.11.nupkg.sha512",
     "C:\\Users\\User\\.nuget\\packages\\zxing.net.bindings.windows.compatibility\\0.16.14\\zxing.net.bindings.windows.compatibility.0.16.14.nupkg.sha512"
@@ -36,7 +42,7 @@
       "filePath": "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos.csproj",
       "libraryId": "PdfiumViewer",
       "targetGraphs": [
-        "net10.0-windows7.0"
+        "net10.0-windows"
       ]
     }
   ]

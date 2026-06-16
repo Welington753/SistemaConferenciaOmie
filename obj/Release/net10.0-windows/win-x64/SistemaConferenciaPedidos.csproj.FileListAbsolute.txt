@@ -230,7 +230,6 @@ C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConfer
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\hostfxr.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\hostpolicy.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\mscordaccore.dll
-C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\mscordaccore_amd64_amd64_10.0.526.15411.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\mscordbi.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\mscorrc.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\msquic.dll
@@ -322,3 +321,11 @@ C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConfer
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\PdfiumViewer.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\nl\PdfiumViewer.resources.dll
 C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\obj\Release\net10.0-windows\win-x64\SistemaConferenciaPedidos.FrmValidacaoEan.resources
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\obj\Release\net10.0-windows\win-x64\SistemaConferenciaPedidos.sourcelink.json
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\Microsoft.Data.Sqlite.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.batteries_v2.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.core.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\SQLitePCLRaw.provider.e_sqlite3.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\e_sqlite3.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\bin\Release\net10.0-windows\win-x64\mscordaccore_amd64_amd64_10.0.726.21808.dll
+C:\Users\User\Documents\Visual Studio 18\SistemaConferenciaPedidos\SistemaConferenciaPedidos\obj\Release\net10.0-windows\win-x64\SistemaConferenciaPedidos.FrmBuscarPedidoPorProduto.resources

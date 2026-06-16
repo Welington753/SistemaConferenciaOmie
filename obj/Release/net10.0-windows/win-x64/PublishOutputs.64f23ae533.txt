@@ -219,7 +219,7 @@ C:\Users\User\Desktop\SistemaConferencia\createdump.exe
 C:\Users\User\Desktop\SistemaConferencia\hostfxr.dll
 C:\Users\User\Desktop\SistemaConferencia\hostpolicy.dll
 C:\Users\User\Desktop\SistemaConferencia\mscordaccore.dll
-C:\Users\User\Desktop\SistemaConferencia\mscordaccore_amd64_amd64_10.0.526.15411.dll
+C:\Users\User\Desktop\SistemaConferencia\mscordaccore_amd64_amd64_10.0.726.21808.dll
 C:\Users\User\Desktop\SistemaConferencia\mscordbi.dll
 C:\Users\User\Desktop\SistemaConferencia\mscorrc.dll
 C:\Users\User\Desktop\SistemaConferencia\msquic.dll
@@ -278,6 +278,7 @@ C:\Users\User\Desktop\SistemaConferencia\zh-Hant\System.Windows.Forms.resources.
 C:\Users\User\Desktop\SistemaConferencia\BinaryKits.Zpl.Label.dll
 C:\Users\User\Desktop\SistemaConferencia\BinaryKits.Zpl.Viewer.dll
 C:\Users\User\Desktop\SistemaConferencia\HarfBuzzSharp.dll
+C:\Users\User\Desktop\SistemaConferencia\Microsoft.Data.Sqlite.dll
 C:\Users\User\Desktop\SistemaConferencia\Microsoft.Extensions.DependencyInjection.Abstractions.dll
 C:\Users\User\Desktop\SistemaConferencia\Microsoft.Extensions.Logging.Abstractions.dll
 C:\Users\User\Desktop\SistemaConferencia\PdfiumViewer.dll
@@ -300,6 +301,9 @@ C:\Users\User\Desktop\SistemaConferencia\PdfSharp.dll
 C:\Users\User\Desktop\SistemaConferencia\SixLabors.ImageSharp.dll
 C:\Users\User\Desktop\SistemaConferencia\SkiaSharp.dll
 C:\Users\User\Desktop\SistemaConferencia\SkiaSharp.HarfBuzz.dll
+C:\Users\User\Desktop\SistemaConferencia\SQLitePCLRaw.batteries_v2.dll
+C:\Users\User\Desktop\SistemaConferencia\SQLitePCLRaw.core.dll
+C:\Users\User\Desktop\SistemaConferencia\SQLitePCLRaw.provider.e_sqlite3.dll
 C:\Users\User\Desktop\SistemaConferencia\Tesseract.dll
 C:\Users\User\Desktop\SistemaConferencia\zxing.dll
 C:\Users\User\Desktop\SistemaConferencia\ZXing.Windows.Compatibility.dll
@@ -307,3 +311,4 @@ C:\Users\User\Desktop\SistemaConferencia\nl\PdfiumViewer.resources.dll
 C:\Users\User\Desktop\SistemaConferencia\libHarfBuzzSharp.dll
 C:\Users\User\Desktop\SistemaConferencia\libSkiaSharp.dll
 C:\Users\User\Desktop\SistemaConferencia\libSkiaSharp.pdb
+C:\Users\User\Desktop\SistemaConferencia\e_sqlite3.dll
