@@ -1,4 +1,4 @@
-﻿using BinaryKits.Zpl.Viewer;
+using BinaryKits.Zpl.Viewer;
 using PdfiumViewer;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -6,6 +6,7 @@ using SistemaConferenciaPedidos.Models;
 using SistemaConferenciaPedidos.Helpers;
 using SistemaConferenciaPedidos.Services;
 using System;
+
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Printing;
@@ -30,6 +31,15 @@ using SistemaOmie.Shared.Services;
 
 namespace SistemaConferenciaPedidos
 {
+    public enum OrigemSolicitacaoImpressao
+    {
+        Botao,
+        F2,
+        Enter,
+        F4,
+        Reimpressao
+    }
+
     public partial class FrmPreparacaoPedidos : Form
     {
 
@@ -38,26 +48,41 @@ namespace SistemaConferenciaPedidos
         private PedidoConferencia _pedidoSelecionado = null;
         private readonly List<EtiquetaMarketplaceLote> _etiquetasLote = new List<EtiquetaMarketplaceLote>();
         private bool _carregandoPedidos = false;
+        private bool _suprimindoEventoData = false;
         private readonly Dictionary<string, string> _cachePedidoShopeeOcr = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<EtiquetaShopeePdf> _etiquetasShopeePdf = new List<EtiquetaShopeePdf>();
         private readonly PedidoItemService _pedidoItemService = new PedidoItemService();
         private readonly EtiquetaService _etiquetaService = new EtiquetaService();
-        private readonly ImpressaoService _impressaoService = new ImpressaoService();
+        internal ImpressaoService ServicoImpressao = new ImpressaoService();
         private readonly PedidoOmieService _pedidoOmieService = new PedidoOmieService();
         private readonly ShopeePdfService _shopeePdfService = new ShopeePdfService();
         private readonly LeituraCodigoService _leituraCodigoService = new LeituraCodigoService();
         private readonly ValidacaoEanService _validacaoEanService = new ValidacaoEanService();
         private readonly VinculacaoEtiquetaService _vinculacaoEtiquetaService = new VinculacaoEtiquetaService();
         private readonly IPedidoRepository _pedidoRepository = new PedidoRepositorySqlite();
+        internal Action<string, string, MessageBoxButtons, MessageBoxIcon> ExibirMensagem = (msg, title, btns, icon) => MessageBox.Show(msg, title, btns, icon);
+        private readonly ValidacaoPreImpressaoService _validacaoPreImpressaoService;
         private readonly PedidoProdutoBuscaService _pedidoProdutoBuscaService = new PedidoProdutoBuscaService();
-        private string _caminhoPdfShopee = "";
-        private string _ultimoArquivoZipImportado = "";
-        private string _nomePdfShopeeNoZip = "";
+        private readonly System.Threading.SemaphoreSlim _controleImpressao = new System.Threading.SemaphoreSlim(1, 1);
+        // private string _caminhoPdfShopee = ""; (removido)
+        // private string _ultimoArquivoZipImportado = ""; (removido)
+        private System.Windows.Forms.Timer _timerAtualizacaoPedidos;
+        private bool _atualizandoPedidos = false;
+        private readonly MercadoLivrePdfService _mercadoLivrePdfService =
+    new MercadoLivrePdfService();
+
+        private readonly List<EtiquetaMercadoLivrePdf> _etiquetasMercadoLivrePdf =
+            new List<EtiquetaMercadoLivrePdf>();
+
+        // private string _caminhoPdfMercadoLivre = ""; (removido)
 
 
         public FrmPreparacaoPedidos()
         {
             InitializeComponent();
+            _validacaoPreImpressaoService = new ValidacaoPreImpressaoService(_pedidoRepository);
+
+            dtpDataInicial.Value = DateTime.Today;
 
             KeyPreview = true;
         }
@@ -69,15 +94,41 @@ namespace SistemaConferenciaPedidos
             btnSalvarPedido.Text = "Importar Etiquetas do Lote";
             btnGerarEtiqueta.Text = "Conferir";
 
+            _suprimindoEventoData = true;
             dtpDataInicial.Value = DateTime.Today;
             dtpDataFinal.Value = DateTime.Today;
+            _suprimindoEventoData = false;
 
             ConfigurarGrids();
             CarregarPedidos();
+
+            ConfigurarAtualizacaoAutomatica();
         }
 
 
+        private void ConfigurarAtualizacaoAutomatica()
+        {
+            _timerAtualizacaoPedidos = new System.Windows.Forms.Timer();
+            _timerAtualizacaoPedidos.Interval = 15 * 60 * 1000; // 15 minutos
+            _timerAtualizacaoPedidos.Tick += async (s, e) =>
+            {
+                await AtualizarPedidosDoOmieAsync(exibirMensagem: false);
+            };
 
+            _timerAtualizacaoPedidos.Start();
+        }
+
+        /// <summary>
+        /// Disparado quando o usuÃ¡rio altera DataInicial ou DataFinal.
+        /// Recarrega a grade sem buscar novamente no Omie.
+        /// </summary>
+        private void dtpData_ValueChanged(object sender, EventArgs e)
+        {
+            if (_suprimindoEventoData || _carregandoPedidos)
+                return;
+
+            CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
+        }
 
 
 
@@ -88,7 +139,7 @@ namespace SistemaConferenciaPedidos
 
             string valor = texto.ToUpperInvariant();
 
-            // mantém só letras e números
+            // mantÃ©m sÃ³ letras e nÃºmeros
             valor = Regex.Replace(valor, @"[^A-Z0-9]", "");
 
             return valor.Trim();
@@ -140,6 +191,14 @@ namespace SistemaConferenciaPedidos
             return dp[a.Length, b.Length];
         }
 
+        private string SomenteNumeros(string valor)
+        {
+            if (string.IsNullOrWhiteSpace(valor))
+                return string.Empty;
+
+            return Regex.Replace(valor, @"\D", string.Empty);
+        }
+
         private int CalcularDistanciaShopee(string pedidoOmie, string pedidoOcr)
         {
             string omie = CanonicalizarCodigoShopee(pedidoOmie);
@@ -186,7 +245,7 @@ namespace SistemaConferenciaPedidos
             if (omie.Length < 10 || ocr.Length < 10)
                 return false;
 
-            // Correções comuns do OCR
+            // CorreÃ§Ãµes comuns do OCR
             string Corrigir(string s) => s
                 .Replace("0", "O")
                 .Replace("1", "I")
@@ -200,7 +259,7 @@ namespace SistemaConferenciaPedidos
             if (omie == ocr)
                 return true;
 
-            // 🔥 NOVO: compara por DISTÂNCIA (tipo Levenshtein simplificado)
+            // ðŸ”¥ NOVO: compara por DISTÃ‚NCIA (tipo Levenshtein simplificado)
             int diferencas = 0;
             int tamanho = Math.Min(omie.Length, ocr.Length);
 
@@ -210,11 +269,11 @@ namespace SistemaConferenciaPedidos
                     diferencas++;
             }
 
-            // penaliza diferença de tamanho também
+            // penaliza diferenÃ§a de tamanho tambÃ©m
             diferencas += Math.Abs(omie.Length - ocr.Length);
 
-            // 👉 regra mágica:
-            // aceita até 3 erros em 14 caracteres
+            // ðŸ‘‰ regra mÃ¡gica:
+            // aceita atÃ© 3 erros em 14 caracteres
             if (diferencas <= 3)
                 return true;
 
@@ -345,12 +404,6 @@ namespace SistemaConferenciaPedidos
                 }
 
                 string textoPagina = NormalizarPedidoShopee(etiqueta.TextoPagina);
-
-                if (!string.IsNullOrWhiteSpace(textoPagina) &&
-                    textoPagina.Contains(numeroPedido))
-                {
-                    return etiqueta;
-                }
             }
 
             return null;
@@ -377,7 +430,7 @@ namespace SistemaConferenciaPedidos
                         Etiqueta = etiquetaExata,
                         Pontuacao = 1000,
                         MatchForte = true,
-                        Motivo = "Código do cliente encontrado na etiqueta"
+                        Motivo = "CÃ³digo do cliente encontrado na etiqueta"
                     };
                 }
 
@@ -395,7 +448,7 @@ namespace SistemaConferenciaPedidos
                         Etiqueta = null,
                         Pontuacao = 1000,
                         MatchForte = true,
-                        Motivo = $"Shopee vinculada pelo PDF. Pedido={etiquetaPdf.PedidoShopee}, Rastreio={etiquetaPdf.CodigoRastreio}, Página={etiquetaPdf.Pagina}"
+                        Motivo = $"Shopee vinculada pelo PDF. Pedido={etiquetaPdf.PedidoShopee}, Rastreio={etiquetaPdf.CodigoRastreio}, PÃ¡gina={etiquetaPdf.Pagina}"
                     };
                 }
 
@@ -417,9 +470,12 @@ namespace SistemaConferenciaPedidos
             {
                 var etiquetasJaUsadas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var outroPedido in PedidoRepository.ObterTodos())
+                var dataInicio = dtpDataInicial.Value.Date;
+                var dataFim = dtpDataFinal.Value.Date.AddDays(1);
+
+                foreach (var outroPedido in _pedidoRepository.ObterPorPeriodo(dataInicio, dataFim))
                 {
-                    if (ReferenceEquals(outroPedido, pedido))
+                    if (ReferenceEquals(outroPedido, pedido) || outroPedido.Id == pedido.Id)
                         continue;
 
                     if (!string.IsNullOrWhiteSpace(outroPedido.EtiquetaMarketplaceZpl))
@@ -507,7 +563,7 @@ namespace SistemaConferenciaPedidos
             }
 
             // Regra extra para Mercado Livre:
-            // às vezes o pedido vem com prefixo e a etiqueta sem ele.
+            // Ã s vezes o pedido vem com prefixo e a etiqueta sem ele.
             if (marketplaceNormalizado == "MERCADO LIVRE" &&
                 numeroOriginal.StartsWith("20000") &&
                 numeroOriginal.Length > 5)
@@ -709,17 +765,42 @@ namespace SistemaConferenciaPedidos
             public string Nome { get; set; } = "";
         }
 
+        private void btnAdministracao_Click(object sender, EventArgs e)
+        {
+            if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
+            {
+                MessageBox.Show("Acesso negado.", "Segurança", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var frm = new FrmAdministracao();
+            frm.ShowDialog();
+            CarregarPedidos();
+        }
+
         private void btnSalvarPedido_Click(object sender, EventArgs e)
         {
             using OpenFileDialog ofd = new OpenFileDialog();
-            ofd.Title = "Selecione o ZIP baixado do Omie";
-            ofd.Filter = "Arquivo ZIP (*.zip)|*.zip";
+
+            ofd.Title = "Selecione o ZIP do Omie ou o PDF do Mercado Livre";
+            ofd.Filter =
+                "Arquivos de etiquetas (*.zip;*.pdf)|*.zip;*.pdf|" +
+                "Arquivo ZIP (*.zip)|*.zip|" +
+                "PDF Mercado Livre (*.pdf)|*.pdf";
 
             if (ofd.ShowDialog() != DialogResult.OK)
                 return;
 
             try
             {
+                string extensao = Path.GetExtension(ofd.FileName);
+
+                if (extensao.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    ImportarPdfMercadoLivre(ofd.FileName);
+                    return;
+                }
+
                 ImportarEtiquetasDoLote(ofd.FileName);
 
                 var pedidos = _pedidoRepository.ObterTodos().ToList();
@@ -727,31 +808,34 @@ namespace SistemaConferenciaPedidos
                 _vinculacaoEtiquetaService.VincularEtiquetas(
                     _etiquetasLote,
                     _etiquetasShopeePdf,
-                    pedidos
+                    pedidos,
+                    ofd.FileName
                 );
 
                 _pedidoRepository.SalvarOuAtualizarVarios(pedidos);
 
                 CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
 
-                int totalMl = _etiquetasLote.Count(x => x.PlataformaDetectada == "Mercado Livre");
-                int totalAmazon = _etiquetasLote.Count(x => x.PlataformaDetectada == "Amazon");
-                int totalShopee = _etiquetasLote.Count(x => x.PlataformaDetectada == "Shopee");
-                int totalDesconhecido = _etiquetasLote.Count(x => string.IsNullOrWhiteSpace(x.PlataformaDetectada));
+                int totalMl = _etiquetasLote.Count(x =>
+                    x.PlataformaDetectada == "Mercado Livre");
+
+                int totalAmazon = _etiquetasLote.Count(x =>
+                    x.PlataformaDetectada == "Amazon");
+
+                int totalShopee = _etiquetasLote.Count(x =>
+                    x.PlataformaDetectada == "Shopee");
+
                 int totalShopeePdf = _etiquetasShopeePdf.Count;
 
                 var vinculados = ContarPedidosVinculados();
 
                 MessageBox.Show(
                     $"Lote importado com sucesso!\n\n" +
-                    $"ETIQUETAS IMPORTADAS NO LOTE:\n" +
-                    $"Total de etiquetas válidas: {_etiquetasLote.Count}\n" +
-                    $"Mercado Livre: {totalMl}\n" +
-                    $"Amazon: {totalAmazon}\n" +
-                    $"Shopee (TXT/ZPL): {totalShopee}\n" +
-                    $"Shopee (PDF): {totalShopeePdf}\n" +
-                    $"Não identificadas: {totalDesconhecido}\n\n" +
-                    $"PEDIDOS REALMENTE VINCULADOS:\n" +
+                    $"Mercado Livre ZPL: {totalMl}\n" +
+                    $"Amazon ZPL: {totalAmazon}\n" +
+                    $"Shopee ZPL: {totalShopee}\n" +
+                    $"Shopee PDF: {totalShopeePdf}\n\n" +
+                    $"Pedidos vinculados:\n" +
                     $"Mercado Livre: {vinculados.ml}\n" +
                     $"Amazon: {vinculados.amazon}\n" +
                     $"Shopee: {vinculados.shopee}\n" +
@@ -759,24 +843,254 @@ namespace SistemaConferenciaPedidos
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao importar lote de etiquetas: " + ex.Message);
+                MessageBox.Show(
+                    "Erro ao importar etiquetas: " + ex.Message,
+                    "Importar etiquetas",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
+
+        private void ImportarPdfMercadoLivre(string caminhoPdf)
+        {
+            try
+            {
+                _etiquetasMercadoLivrePdf.Clear();
+                // _caminhoPdfMercadoLivre = caminhoPdf;
+
+                var etiquetas =
+                    _mercadoLivrePdfService.CarregarEtiquetas(caminhoPdf);
+
+                _etiquetasMercadoLivrePdf.AddRange(etiquetas);
+
+                if (_etiquetasMercadoLivrePdf.Count == 0)
+                {
+                    MessageBox.Show(
+                        "Nenhuma etiqueta vÃ¡lida do Mercado Livre foi encontrada.",
+                        "PDF Mercado Livre",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+
+                    return;
+                }
+
+                var pedidos =
+                    _pedidoRepository.ObterTodos().ToList();
+
+                var pedidosMercadoLivre = pedidos
+                    .Where(p =>
+                        MarketplaceHelper.NormalizarMarketplace(
+                            p.Marketplace) == "MERCADO LIVRE")
+                    .ToList();
+
+                /*
+                 * Ãndice por Venda.
+                 */
+                var etiquetasPorCodigo = _etiquetasMercadoLivrePdf
+                    .Where(e => !string.IsNullOrWhiteSpace(e.CodigoEtiqueta) && SomenteNumeros(e.CodigoEtiqueta).Length == 11)
+                    .GroupBy(e => SomenteNumeros(e.CodigoEtiqueta))
+                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+                var etiquetasPorVenda =
+                    _etiquetasMercadoLivrePdf
+                        .Where(e =>
+                            SomenteNumeros(e.NumeroVenda).Length == 16)
+                        .GroupBy(e =>
+                            SomenteNumeros(e.NumeroVenda))
+                        .ToDictionary(
+                            grupo => grupo.Key,
+                            grupo => grupo.First(),
+                            StringComparer.OrdinalIgnoreCase);
+
+                /*
+                 * Ãndice por Pack ID.
+                 */
+                var etiquetasPorPackId =
+                    _etiquetasMercadoLivrePdf
+                        .Where(e =>
+                            SomenteNumeros(e.PackId).Length == 16)
+                        .GroupBy(e =>
+                            SomenteNumeros(e.PackId))
+                        .ToDictionary(
+                            grupo => grupo.Key,
+                            grupo => grupo.First(),
+                            StringComparer.OrdinalIgnoreCase);
+
+                int vinculadosPorVenda = 0;
+                int vinculadosPorPackId = 0;
+                int jaVinculados = 0;
+                int semCodigo = 0;
+                int semCorrespondencia = 0;
+                int vinculadosPorCodigo = 0;
+
+                foreach (var pedido in pedidosMercadoLivre)
+                {
+                    string referenciaAtual =
+                        pedido.EtiquetaMarketplaceZpl ?? string.Empty;
+
+                    string codigoAtual =
+                        SomenteNumeros(pedido.CodigoEtiqueta);
+
+                    bool temCodigoSalvo = codigoAtual.Length == 11;
+
+                    // Se o pedido JÃ TEM cÃ³digo (11 dÃ­gitos), usamos ele para buscar a pÃ¡gina correta no PDF.
+                    // Isso evita cruzamento de pÃ¡ginas por erro na extraÃ§Ã£o do NumeroVenda.
+                    if (temCodigoSalvo)
+                    {
+                        if (etiquetasPorCodigo.TryGetValue(codigoAtual, out var listaPorCodigo))
+                        {
+                            if (listaPorCodigo.Count == 1)
+                            {
+                                var etiquetaUnica = listaPorCodigo[0];
+                                bool paginaEmUso = pedidos.Any(p => p != pedido && p.Marketplace == pedido.Marketplace && p.PaginaPdf == etiquetaUnica.Pagina);
+                                if (!paginaEmUso)
+                                {
+                                    pedido.CaminhoZipImportacao = caminhoPdf;
+                                    pedido.NomePdfNoZip = "";
+                                    pedido.PaginaPdf = etiquetaUnica.Pagina;
+                                    pedido.EtiquetaMarketplaceZpl = $"PDF_MELI|{etiquetaUnica.Pagina}";
+                                    pedido.Status = "Etiqueta vinculada";
+                                    vinculadosPorCodigo++;
+                                }
+                            }
+                        }
+                        
+                        jaVinculados++;
+                        continue;
+                    }
+
+                    // LÃ³gica para pedidos SEM CodigoEtiqueta (novos ou importados do Omie sem ZPL)
+                    string numeroPedido =
+                        SomenteNumeros(pedido.NumeroPedidoCliente);
+
+                    EtiquetaMercadoLivrePdf etiqueta = null;
+                    bool encontrouPorVenda = false;
+                    bool encontrouPorPackId = false;
+
+                    /*
+                     * Primeira tentativa:
+                     * NÃºmero do pedido do Omie igual Ã  Venda.
+                     */
+                    if (numeroPedido.Length == 16 &&
+                        etiquetasPorVenda.TryGetValue(
+                            numeroPedido,
+                            out EtiquetaMercadoLivrePdf etiquetaVenda))
+                    {
+                        etiqueta = etiquetaVenda;
+                        encontrouPorVenda = true;
+                    }
+
+                    /*
+                     * Segunda tentativa:
+                     * NÃºmero do pedido do Omie igual ao Pack ID.
+                     */
+                    if (etiqueta == null &&
+                        numeroPedido.Length == 16 &&
+                        etiquetasPorPackId.TryGetValue(
+                            numeroPedido,
+                            out EtiquetaMercadoLivrePdf etiquetaPack))
+                    {
+                        etiqueta = etiquetaPack;
+                        encontrouPorPackId = true;
+                    }
+
+                    if (etiqueta == null)
+                    {
+                        semCorrespondencia++;
+                        continue;
+                    }
+
+                    pedido.EtiquetaMarketplaceZpl =
+                        $"PDF_MELI|{etiqueta.Pagina}";
+                    pedido.CaminhoZipImportacao = caminhoPdf;
+                    pedido.NomePdfNoZip = "";
+                    pedido.PaginaPdf = etiqueta.Pagina;
+
+                    string codigoEncontrado =
+                        SomenteNumeros(etiqueta.CodigoEtiqueta);
+
+                    if (codigoEncontrado.Length != 11)
+                    {
+                        pedido.CodigoEtiqueta = string.Empty;
+
+                        pedido.Status =
+                            "PDF encontrado - cÃ³digo nÃ£o identificado";
+
+                        semCodigo++;
+                        continue;
+                    }
+
+                    pedido.CodigoEtiqueta =
+                        codigoEncontrado;
+
+                    pedido.Status =
+                        "Etiqueta vinculada";
+
+                    if (encontrouPorVenda)
+                        vinculadosPorVenda++;
+                    else if (encontrouPorPackId)
+                        vinculadosPorPackId++;
+                }
+
+                _pedidoRepository
+                    .SalvarOuAtualizarVarios(pedidos);
+
+                CarregarPedidos(
+                    _pedidoSelecionado?.NumeroPedidoCliente);
+
+                int etiquetasComVenda =
+                    _etiquetasMercadoLivrePdf.Count(e =>
+                        SomenteNumeros(e.NumeroVenda).Length == 16);
+
+                int etiquetasComPackId =
+                    _etiquetasMercadoLivrePdf.Count(e =>
+                        SomenteNumeros(e.PackId).Length == 16);
+
+                int etiquetasComCodigo =
+                    _etiquetasMercadoLivrePdf.Count(e =>
+                        SomenteNumeros(e.CodigoEtiqueta).Length == 11);
+
+                MessageBox.Show(
+                    $"PDF do Mercado Livre importado!\n\n" +
+                    $"PÃ¡ginas de etiqueta encontradas: " +
+                    $"{_etiquetasMercadoLivrePdf.Count}\n" +
+                    $"Etiquetas com Venda: {etiquetasComVenda}\n" +
+                    $"Etiquetas com Pack ID: {etiquetasComPackId}\n" +
+                    $"Etiquetas com cÃ³digo vÃ¡lido: {etiquetasComCodigo}\n\n" +
+                    $"Vinculados pela Venda: {vinculadosPorVenda}\n" +
+                    $"Vinculados pelo Pack ID: {vinculadosPorPackId}\n" +
+                    $"JÃ¡ tinham etiqueta completa: {jaVinculados}\n" +
+                    $"PDF encontrado, mas sem cÃ³digo: {semCodigo}\n" +
+                    $"Pedidos sem correspondÃªncia: {semCorrespondencia}",
+                    "PDF Mercado Livre",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Erro ao importar o PDF do Mercado Livre:\n\n" +
+                    ex.Message,
+                    "PDF Mercado Livre",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+
 
         private void ImportarEtiquetasDoLote(string caminhoZip)
         {
             _etiquetasLote.Clear();
             _etiquetasShopeePdf.Clear();
             _cachePedidoShopeeOcr.Clear();
-            _ultimoArquivoZipImportado = caminhoZip;
-            _nomePdfShopeeNoZip = "";
+            // _ultimoArquivoZipImportado = caminhoZip;
 
             using (ZipArchive zip = ZipFile.OpenRead(caminhoZip))
             {
-                var etiquetasShopee = _shopeePdfService.CarregarEtiquetasDoZip(zip, out string nomePdfNoZip);
+                var etiquetasShopee = _shopeePdfService.CarregarEtiquetasDoZip(zip);
 
                 _etiquetasShopeePdf.AddRange(etiquetasShopee);
-                _nomePdfShopeeNoZip = nomePdfNoZip;
             }
 
             var etiquetas = _etiquetaService.ImportarEtiquetas(caminhoZip);
@@ -784,7 +1098,7 @@ namespace SistemaConferenciaPedidos
             _etiquetasLote.AddRange(etiquetas);
 
             if (_etiquetasLote.Count == 0)
-                throw new Exception("Nenhuma etiqueta válida foi encontrada dentro do arquivo TXT.");
+                throw new Exception("Nenhuma etiqueta vÃ¡lida foi encontrada dentro do arquivo TXT.");
         }
 
 
@@ -807,7 +1121,7 @@ namespace SistemaConferenciaPedidos
                 sb.AppendLine("======================================");
                 sb.AppendLine("ORDEM NO ARQUIVO: " + etiqueta.OrdemNoArquivo);
                 sb.AppendLine("PLATAFORMA: " + etiqueta.PlataformaDetectada);
-                sb.AppendLine("TEXTO EXTRAÍDO DOS ^FD:");
+                sb.AppendLine("TEXTO EXTRAÃDO DOS ^FD:");
                 sb.AppendLine(_etiquetaService.ExtrairTextosFdDoZpl(etiqueta.ConteudoZpl));
                 sb.AppendLine();
             }
@@ -815,123 +1129,155 @@ namespace SistemaConferenciaPedidos
             return sb.ToString();
         }
 
-        private void ImprimirPedidoSelecionado()
+        internal async Task ExecutarImpressaoSeguraAsync(PedidoConferencia pedidoInicial, OrigemSolicitacaoImpressao origem)
         {
-            if (_pedidoSelecionado == null)
+            if (pedidoInicial == null || string.IsNullOrWhiteSpace(pedidoInicial.NumeroPedidoCliente))
             {
-                MessageBox.Show("Selecione um pedido.");
+                ExibirMensagem("Nenhum pedido especificado.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            if (!ValidarEansAntesDaImpressao(_pedidoSelecionado))
+            bool acquired = await _controleImpressao.WaitAsync(0);
+            if (!acquired)
             {
-                MessageBox.Show("Impressão cancelada. Os EANs do pedido não foram conferidos.");
+                ExibirMensagem("Uma impressÃ£o jÃ¡ estÃ¡ em andamento. Aguarde.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-
-            if (_etiquetasLote.Count == 0)
-            {
-                MessageBox.Show("Importe primeiro o lote de etiquetas.");
-                return;
-            }
-
-            string zplEncontrado = _pedidoSelecionado.EtiquetaMarketplaceZpl;
-
-            if (string.IsNullOrWhiteSpace(zplEncontrado))
-            {
-                MessageBox.Show(
-                    "Não encontrei a etiqueta deste pedido dentro do lote importado.\n\n" +
-                    "Confira se esse pedido realmente está no ZIP carregado.");
-                return;
-            }
-
-            string numeroPedidoAtual = _pedidoSelecionado.NumeroPedidoCliente ?? "";
 
             try
             {
+                btnImprimirEtiqueta.Enabled = false;
                 Cursor = Cursors.WaitCursor;
-                Application.DoEvents();
 
-                _impressaoService.ImprimirPedido(
-                    _pedidoSelecionado,
-                    _ultimoArquivoZipImportado,
-                    _nomePdfShopeeNoZip
+                // 1. Recarregue o pedido pelo identificador persistente.
+                // Se o Id estiver preenchido (caso tenha vindo do BD apÃ³s as atualizaÃ§Ãµes recentes), usamos ele, senÃ£o pelo nÃºmero.
+                var pedidoAtual = pedidoInicial.Id > 0
+                    ? _pedidoRepository.ObterPorId(pedidoInicial.Id)
+                    : _pedidoRepository.ObterPorNumero(pedidoInicial.NumeroPedidoCliente);
+                
+                if (pedidoAtual == null)
+                {
+                    ExibirMensagem("Pedido não encontrado no banco de dados.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                if (!ValidarEansAntesDaImpressao(pedidoAtual))
+                {
+                    ExibirMensagem("Impressão cancelada. Os EANs do pedido não foram conferidos.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(pedidoAtual.EtiquetaMarketplaceZpl))
+                {
+                    ExibirMensagem("Importe primeiro o lote de etiquetas ou garanta que o pedido possui uma etiqueta vinculada.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                string motivoReimpressao = null;
+                if (pedidoAtual.Impresso)
+                {
+                    if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
+                    {
+                        ExibirMensagem("Impressão bloqueada (autorização negada ou cancelada).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    motivoReimpressao = FrmMotivoReimpressao.SolicitarMotivo(this);
+                    if (string.IsNullOrWhiteSpace(motivoReimpressao))
+                    {
+                        ExibirMensagem("Impressão bloqueada (motivo não informado).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
+
+                // 2. O snapshot deve copiar obrigatoriamente:
+                var snapshot = new PedidoConferencia
+                {
+                    Id = pedidoAtual.Id,
+                    NumeroPedidoCliente = pedidoAtual.NumeroPedidoCliente,
+                    Marketplace = pedidoAtual.Marketplace,
+                    CodigoEtiqueta = pedidoAtual.CodigoEtiqueta,
+                    EtiquetaMarketplaceZpl = pedidoAtual.EtiquetaMarketplaceZpl,
+                    CaminhoZipImportacao = pedidoAtual.CaminhoZipImportacao,
+                    NomePdfNoZip = pedidoAtual.NomePdfNoZip,
+                    PaginaPdf = pedidoAtual.PaginaPdf,
+                    DataPrevisao = pedidoAtual.DataPrevisao,
+                    Impresso = pedidoAtual.Impresso,
+                    Status = pedidoAtual.Status,
+                    DataCriacao = pedidoAtual.DataCriacao
+                };
+
+                // 3. ValidaÃ§Ã£o e ImpressÃ£o apenas com snapshot
+                var validacao = _validacaoPreImpressaoService.ValidarAntesDaImpressao(snapshot);
+
+                if (!validacao.Valido)
+                {
+                    ExibirMensagem($"IMPRESSÃƒO BLOQUEADA!\n\nMotivo: {validacao.MotivoBloqueio}\nDetalhes: {validacao.Mensagem}", "Falha de SeguranÃ§a", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var resultadoImpressao = ServicoImpressao.ImprimirPedido(
+                    snapshot,
+                    snapshot.CaminhoZipImportacao,
+                    snapshot.CaminhoZipImportacao
                 );
 
-                _pedidoSelecionado.Impresso = true;
-
-                _pedidoRepository.SalvarOuAtualizar(_pedidoSelecionado);
-
-                CarregarPedidos(numeroPedidoAtual);
-                SelecionarProximoPedidoNaoImpresso();
+                if (resultadoImpressao.Sucesso && resultadoImpressao.Status == StatusResultadoImpressao.EnviadoParaFila)
+                {
+                    var pedidoOriginalParaAtualizar = _pedidoRepository.ObterPorId(snapshot.Id);
+                    if (pedidoOriginalParaAtualizar != null)
+                    {
+                        if (pedidoOriginalParaAtualizar.Impresso)
+                        {
+                            pedidoOriginalParaAtualizar.DataReimpressao = DateTime.Now;
+                            pedidoOriginalParaAtualizar.MotivoReimpressao = motivoReimpressao;
+                            pedidoOriginalParaAtualizar.Conferido = false; // Reset de segurança
+                            
+                            var authService = new SistemaConferenciaPedidos.Services.AdminAuthService();
+                            authService.RegistrarAcao("REIMPRESSAO_PEDIDO", pedidoOriginalParaAtualizar.NumeroPedidoCliente, $"Motivo: {motivoReimpressao}");
+                        }
+                        else
+                        {
+                            pedidoOriginalParaAtualizar.DataPrimeiraImpressao = DateTime.Now;
+                        }
+                        
+                        pedidoOriginalParaAtualizar.Impresso = true;
+                        _pedidoRepository.SalvarOuAtualizar(pedidoOriginalParaAtualizar);
+                    }
+                    
+                    CarregarPedidos(snapshot.NumeroPedidoCliente);
+                    SelecionarProximoPedidoNaoImpresso();
+                }
+                else if (resultadoImpressao.Status == StatusResultadoImpressao.EstadoDesconhecido)
+                {
+                    ExibirMensagem("Não foi possível confirmar se a etiqueta foi enviada. Verifique a fila de impressão antes de tentar novamente.", "Atenção", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                else
+                {
+                    ExibirMensagem("Falha na impressão: " + resultadoImpressao.Mensagem, "Atenção", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao imprimir: " + ex.Message);
+                ExibirMensagem("Erro inesperado ao imprimir: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
+                btnImprimirEtiqueta.Enabled = true;
                 Cursor = Cursors.Default;
+                _controleImpressao.Release();
             }
         }
 
-        private void btnImprimirEtiqueta_Click(object sender, EventArgs e)
+        private async void btnImprimirEtiqueta_Click(object sender, EventArgs e)
         {
             if (_pedidoSelecionado == null)
             {
-                MessageBox.Show("Selecione um pedido.");
+                MessageBox.Show("Selecione um pedido na grade.");
                 return;
             }
-
-            if (!ValidarEansAntesDaImpressao(_pedidoSelecionado))
-            {
-                MessageBox.Show("Impressão cancelada. Os EANs do pedido não foram conferidos.");
-                return;
-            }
-
-            if (_etiquetasLote.Count == 0)
-            {
-                MessageBox.Show("Importe primeiro o lote de etiquetas.");
-                return;
-            }
-
-            string zplEncontrado = _pedidoSelecionado.EtiquetaMarketplaceZpl;
-
-            if (string.IsNullOrWhiteSpace(zplEncontrado))
-            {
-                MessageBox.Show(
-                    "Não encontrei a etiqueta deste pedido dentro do lote importado.\n\n" +
-                    "Confira se esse pedido realmente está no ZIP carregado.");
-                return;
-            }
-
-            string numeroPedidoAtual = _pedidoSelecionado.NumeroPedidoCliente ?? "";
-
-            try
-            {
-                Cursor = Cursors.WaitCursor;
-                Application.DoEvents();
-
-                _impressaoService.ImprimirPedido(
-                    _pedidoSelecionado,
-                    _ultimoArquivoZipImportado,
-                    _nomePdfShopeeNoZip
-                );
-
-                _pedidoSelecionado.Impresso = true;
-
-                _pedidoRepository.SalvarOuAtualizar(_pedidoSelecionado);
-
-                CarregarPedidos(numeroPedidoAtual);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Erro ao imprimir: " + ex.Message);
-            }
-            finally
-            {
-                Cursor = Cursors.Default;
-            }
+            
+            await ExecutarImpressaoSeguraAsync(_pedidoSelecionado, OrigemSolicitacaoImpressao.Botao);
         }
 
         private void CarregarPedidos(string numeroPedidoParaRestaurar = null)
@@ -940,9 +1286,15 @@ namespace SistemaConferenciaPedidos
 
             try
             {
-                var lista = _pedidoRepository.ObterTodos()
-    .Where(PedidoEhDeMarketplaceValido)
-    .OrderBy(p => MarketplaceHelper.ObterOrdemMarketplace(p.Marketplace))
+                DateTime inicio = dtpDataInicial.Value.Date;
+                DateTime fimExclusivo = dtpDataFinal.Value.Date.AddDays(1);
+
+                if (inicio > dtpDataFinal.Value.Date)
+                    fimExclusivo = inicio.AddDays(1); // protege inversão silenciosa
+
+                var lista = _pedidoRepository.ObterPorPeriodo(inicio, fimExclusivo)
+                    .Where(PedidoEhDeMarketplaceValido)
+                    .OrderBy(p => MarketplaceHelper.ObterOrdemMarketplace(p.Marketplace))
                     .ThenBy(p => (p.NumeroPedidoCliente ?? "").Trim())
                     .ThenBy(p => (p.NomeCliente ?? "").Trim())
                     .ToList();
@@ -1016,6 +1368,8 @@ namespace SistemaConferenciaPedidos
                 FormatarColunaMarketplace();
                 FormatarLinhasSemEtiqueta();
 
+                AtualizarResumoPreparacao(lista);
+
                 if (!string.IsNullOrWhiteSpace(numeroPedidoParaRestaurar))
                     RestaurarSelecaoPedido(numeroPedidoParaRestaurar);
             }
@@ -1023,6 +1377,64 @@ namespace SistemaConferenciaPedidos
             {
                 _carregandoPedidos = false;
             }
+        }
+
+        public ResumoPreparacaoResult ResumoAtual { get; private set; } = new ResumoPreparacaoResult();
+
+        public ResumoPreparacaoResult CalcularResumoPreparacao(IEnumerable<PedidoConferencia> pedidos)
+        {
+            if (pedidos == null)
+            {
+                return new ResumoPreparacaoResult(0, 0, 0, 0);
+            }
+
+            var pedidosValidos = pedidos
+                .Where(p => p != null)
+                .Where(p => !p.Oculto)
+                .Where(p => !string.Equals((p.Status ?? "").Trim(), "Cancelado", StringComparison.OrdinalIgnoreCase))
+                .Where(PedidoEhDeMarketplaceValido)
+                .ToList();
+
+            int total = pedidosValidos.Count;
+            int preparados = pedidosValidos.Count(p => p.Impresso);
+            int faltam = Math.Max(0, total - preparados);
+            int percentual = total == 0 ? 0 : (int)Math.Round((double)preparados / total * 100);
+
+            return new ResumoPreparacaoResult(total, preparados, faltam, percentual);
+        }
+
+        public ResumoPreparacaoResult AtualizarResumoPreparacao(IEnumerable<PedidoConferencia> pedidos = null)
+        {
+            if (pedidos == null)
+            {
+                if (dgvPedidos?.DataSource is IEnumerable<PedidoConferencia> listaGrid)
+                    pedidos = listaGrid;
+                else
+                    pedidos = new List<PedidoConferencia>();
+            }
+
+            var resumo = CalcularResumoPreparacao(pedidos);
+            ResumoAtual = resumo;
+
+            if (lblResumoTotal != null)
+                lblResumoTotal.Text = $"Total: {resumo.Total}";
+
+            if (lblResumoPreparados != null)
+                lblResumoPreparados.Text = $"Preparados: {resumo.Preparados}";
+
+            if (lblResumoFaltam != null)
+                lblResumoFaltam.Text = $"Faltam: {resumo.Faltam}";
+
+            if (lblResumoPercentual != null)
+                lblResumoPercentual.Text = $"Progresso: {resumo.Percentual}%";
+
+            if (pbProgressoResumo != null)
+            {
+                int valProgress = Math.Min(100, Math.Max(0, resumo.Percentual));
+                pbProgressoResumo.Value = valProgress;
+            }
+
+            return resumo;
         }
 
         private void FormatarColunaImpresso()
@@ -1244,6 +1656,16 @@ namespace SistemaConferenciaPedidos
 
         private async void btnBuscarPedidos_Click(object sender, EventArgs e)
         {
+            var confirmacao = MessageBox.Show(
+                "Deseja procurar novamente os pedidos?",
+                "Confirmar nova busca",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+
+            if (confirmacao != DialogResult.Yes)
+                return;
+
             btnBuscarPedidos.Enabled = false;
 
             try
@@ -1267,9 +1689,9 @@ namespace SistemaConferenciaPedidos
                     .Where(p => !PedidoEhDeMarketplaceValido(p))
                     .ToList();
 
-                _pedidoRepository.Limpar();
-
-                _pedidoRepository.SalvarOuAtualizarVarios(pedidosMarketplace);
+                // Sincronização segura através de serviço dedicado
+                var syncService = new SistemaConferenciaPedidos.Services.PedidoSincronizacaoService(_pedidoRepository);
+                await syncService.SincronizarAsync(pedidosMarketplace);
 
                 _pedidoSelecionado = null;
                 _jsonPedidoSelecionado = "[]";
@@ -1301,11 +1723,99 @@ namespace SistemaConferenciaPedidos
             }
         }
 
-        private async void btnAtualizarPedidos_Click(object sender, EventArgs e)
+
+        private void btnExcluirPedido_Click(object sender, EventArgs e)
         {
+            if (_pedidoSelecionado == null)
+            {
+                MessageBox.Show(
+                    "Selecione um pedido para remover.",
+                    "Remover pedido",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            string numeroPedido = _pedidoSelecionado.NumeroPedidoCliente ?? "";
+            string cliente = _pedidoSelecionado.NomeCliente ?? "";
+
+            var confirmacao = MessageBox.Show(
+                $"Deseja realmente remover este pedido do painel de preparação?\n\n" +
+                $"Pedido: {numeroPedido}\n" +
+                $"Cliente: {cliente}\n\n" +
+                "Ele também deixará de aparecer na conferência e não voltará nas próximas buscas.",
+                "Confirmar remoção",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (confirmacao != DialogResult.Yes)
+                return;
+
+            if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
+                return;
+
             try
             {
-                btnAtualizarPedidos.Enabled = false;
+                bool removido = _pedidoRepository.OcultarPedido(numeroPedido);
+
+                if (!removido)
+                {
+                    MessageBox.Show(
+                        "Não foi possível localizar o pedido para remoção.",
+                        "Remover pedido",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                _pedidoSelecionado = null;
+                _jsonPedidoSelecionado = "[]";
+                txtCliente.Clear();
+                txtPedidoCliente.Clear();
+                txtMarketplace.Clear();
+                txtCodigoEtiqueta.Clear();
+                dgvItensPedido.DataSource = null;
+
+                CarregarPedidos();
+
+                MessageBox.Show(
+                    "Pedido removido do painel de preparação e da conferência.",
+                    "Pedido removido",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Erro ao remover pedido: " + ex.Message,
+                    "Remover pedido",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private async void btnAtualizarPedidos_Click(object sender, EventArgs e)
+        {
+            await AtualizarPedidosDoOmieAsync(exibirMensagem: true);
+        }
+        private void btnGerarEtiqueta_Click(object sender, EventArgs e)
+        {
+            using var frm = new FrmConferencia(dtpDataInicial.Value);
+            frm.ShowDialog();
+        }
+
+        private async Task AtualizarPedidosDoOmieAsync(bool exibirMensagem)
+        {
+            if (_atualizandoPedidos)
+                return;
+
+            try
+            {
+                _atualizandoPedidos = true;
+
+                if (exibirMensagem)
+                    btnAtualizarPedidos.Enabled = false;
 
                 var dataInicial = dtpDataInicial.Value.Date;
                 var dataFinal = dtpDataFinal.Value.Date;
@@ -1320,56 +1830,39 @@ namespace SistemaConferenciaPedidos
                     .Where(p => !PedidoEhDeMarketplaceValido(p))
                     .ToList();
 
-                int novos = 0;
-                int atualizados = 0;
+                // Sincronização segura através de serviço dedicado (idempotente e imune a corrida)
+                var syncService = new SistemaConferenciaPedidos.Services.PedidoSincronizacaoService(_pedidoRepository);
+                await syncService.SincronizarAsync(pedidosMarketplace);
 
-                var pedidosExistentes = _pedidoRepository.ObterTodos();
+                CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
 
-                foreach (var pedido in pedidosMarketplace)
+                if (exibirMensagem)
                 {
-                    var existente = pedidosExistentes.FirstOrDefault(p =>
-                        string.Equals(
-                            (p.NumeroPedidoCliente ?? "").Trim(),
-                            (pedido.NumeroPedidoCliente ?? "").Trim(),
-                            StringComparison.OrdinalIgnoreCase));
-
-                    if (existente == null)
-                        novos++;
-                    else
-                        atualizados++;
-
-                    _pedidoRepository.SalvarOuAtualizarPreservandoStatus(pedido);
+                    MessageBox.Show(
+                        $"Atualização concluída!\n\n" +
+                        $"Pedidos de marketplace processados: {pedidosMarketplace.Count}\n" +
+                        $"Ignorados por não serem Amazon/Shopee/Mercado Livre: {pedidosIgnorados.Count}",
+                        "Atualizar pedidos",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
                 }
-
-                CarregarPedidos();
-
-                MessageBox.Show(
-                    $"Atualização concluída!\n\n" +
-                    $"Novos pedidos: {novos}\n" +
-                    $"Atualizados: {atualizados}\n" +
-                    $"Ignorados por não serem Amazon/Shopee/Mercado Livre: {pedidosIgnorados.Count}",
-                    "Atualizar pedidos",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao atualizar pedidos:\n" + ex.Message);
+                if (exibirMensagem)
+                    MessageBox.Show("Erro ao atualizar pedidos:\n" + ex.Message);
             }
             finally
             {
-                btnAtualizarPedidos.Enabled = true;
+                _atualizandoPedidos = false;
+
+                if (exibirMensagem)
+                    btnAtualizarPedidos.Enabled = true;
             }
         }
-        private void btnGerarEtiqueta_Click(object sender, EventArgs e)
-        {
-            using var frm = new FrmConferencia();
-            frm.ShowDialog();
-        }
-
         private void btnImprimirPorProduto_Click(object sender, EventArgs e)
         {
-            using var frm = new FrmBuscarPedidoPorProduto(ImprimirPedidoEncontradoPorProduto);
+            using var frm = new FrmBuscarPedidoPorProduto(dtpDataInicial.Value.Date, dtpDataFinal.Value.Date, ImprimirPedidoEncontradoPorProduto);
             frm.ShowDialog();
 
             CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
@@ -1406,6 +1899,13 @@ namespace SistemaConferenciaPedidos
 
                     return true;
 
+                case Keys.Delete:
+
+                    if (btnExcluirPedido.Enabled)
+                        btnExcluirPedido.PerformClick();
+
+                    return true;
+
                 case Keys.Escape:
 
                     dgvPedidos.ClearSelection();
@@ -1428,7 +1928,7 @@ namespace SistemaConferenciaPedidos
 
             await SelecionarPedidoAsync(pedido);
         }
-        private void dgvPedidos_KeyDown(object sender, KeyEventArgs e)
+        private async void dgvPedidos_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -1436,7 +1936,7 @@ namespace SistemaConferenciaPedidos
 
                 if (_pedidoSelecionado != null)
                 {
-                    ImprimirPedidoSelecionado();
+                    await ExecutarImpressaoSeguraAsync(_pedidoSelecionado, OrigemSolicitacaoImpressao.Enter);
                 }
             }
         }
@@ -1463,16 +1963,77 @@ namespace SistemaConferenciaPedidos
                 return;
             }
         }
-        private void ImprimirPedidoEncontradoPorProduto(PedidoConferencia pedido)
+        private async void ImprimirPedidoEncontradoPorProduto(PedidoConferencia pedido)
         {
             if (pedido == null)
                 return;
 
+            var dataInicial = dtpDataInicial.Value.Date;
+            var dataFinal = dtpDataFinal.Value.Date.AddDays(1);
+            var dataComparar = pedido.DataPrevisao ?? pedido.DataCriacao;
+
+            if (dataComparar < dataInicial || dataComparar >= dataFinal)
+            {
+                MessageBox.Show("Este pedido não pertence à data selecionada.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             _pedidoSelecionado = pedido;
 
-            ImprimirPedidoSelecionado();
+            await ExecutarImpressaoSeguraAsync(pedido, OrigemSolicitacaoImpressao.F4);
+        }
 
-            CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
+        private void btnValidarVinculos_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+
+                var dataFiltro = dtpDataInicial.Value.Date;
+                var pedidosFiltro = _pedidoRepository.ObterPorPeriodo(dataFiltro, dataFiltro.AddDays(1))
+                    .Where(p => p.Status != "Cancelado")
+                    .ToList();
+
+                int total = pedidosFiltro.Count;
+                int validos = 0;
+                int falhas = 0;
+                var errosBuilder = new StringBuilder();
+
+                foreach (var pedido in pedidosFiltro)
+                {
+                    var validacao = _validacaoPreImpressaoService.ValidarAntesDaImpressao(pedido);
+                    if (validacao.Valido)
+                    {
+                        validos++;
+                    }
+                    else
+                    {
+                        falhas++;
+                        errosBuilder.AppendLine($"[Nº {pedido.NumeroPedidoCliente} | {pedido.Marketplace}]");
+                        errosBuilder.AppendLine($"   Motivo: {validacao.MotivoBloqueio}");
+                        errosBuilder.AppendLine($"   Detalhe: {validacao.Mensagem}");
+                        errosBuilder.AppendLine(new string('-', 50));
+                    }
+                }
+
+                if (falhas == 0)
+                {
+                    MessageBox.Show($"Resumo do dia {dataFiltro:dd/MM/yyyy}:\n\nTotal: {total}\nVálidos: {validos}\n\nTodos os vínculos estão corretos!", "Validação de Vínculos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    var msg = $"Resumo do dia {dataFiltro:dd/MM/yyyy}:\n\nTotal: {total}\nVálidos: {validos}\nInconsistentes: {falhas}\n\nDetalhes:\n{errosBuilder.ToString()}";
+                    MessageBox.Show(msg, "Validação de Vínculos - INCONSISTÊNCIAS", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erro ao validar vínculos: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
         }
     }
 }

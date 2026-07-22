@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Models;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -12,9 +12,20 @@ namespace SistemaConferenciaPedidos.Services
 
         public PedidoOmieService()
         {
+            var config = new Repositories.ConfiguracaoRepositorySqlite();
+            
+            string appKey = config.ObterValor("OmieAppKey", "3967066699596");
+            string appSecret = config.ObterValor("OmieAppSecret", "85e0d23541afa63e481e20c67e7a289d");
+
+            if (config.ObterValor("OmieAppKey") == "")
+            {
+                config.SalvarValor("OmieAppKey", appKey);
+                config.SalvarValor("OmieAppSecret", appSecret);
+            }
+
             _omieService = new OmieService(
-                "3967066699596",
-                "85e0d23541afa63e481e20c67e7a289d",
+                appKey,
+                appSecret,
                 "https://app.omie.com.br/api/v1/produtos/pedido/");
         }
 
@@ -114,7 +125,8 @@ namespace SistemaConferenciaPedidos.Services
                         Marketplace = marketplace,
                         JsonItens = pedidoNode.ToString(),
                         EtiquetaMarketplaceZpl = "",
-                        Status = "Importado"
+                        Status = "Importado",
+                        DataPrevisao = dataPedido
                     };
 
                     pedidosImportados.Add(pedido);

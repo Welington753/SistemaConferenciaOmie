@@ -1,7 +1,7 @@
 {
-  "version": 3,
+  "version": 4,
   "targets": {
-    "net10.0-windows7.0": {
+    "net10.0-windows": {
       "BinaryKits.Zpl.Label/3.3.1": {
         "type": "package",
         "dependencies": {
@@ -687,9 +687,19 @@
             "related": ".pdb;.xml"
           }
         }
+      },
+      "SistemaOmie.Shared/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/SistemaOmie.Shared.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/SistemaOmie.Shared.dll": {}
+        }
       }
     },
-    "net10.0-windows7.0/win-x64": {
+    "net10.0-windows/win-x64": {
       "BinaryKits.Zpl.Label/3.3.1": {
         "type": "package",
         "dependencies": {
@@ -1146,6 +1156,16 @@
           "lib/net9.0/ZXing.Windows.Compatibility.dll": {
             "related": ".pdb;.xml"
           }
+        }
+      },
+      "SistemaOmie.Shared/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/SistemaOmie.Shared.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/SistemaOmie.Shared.dll": {}
         }
       }
     }
@@ -2119,16 +2139,22 @@
         "zxing.net.bindings.windows.compatibility.0.16.14.nupkg.sha512",
         "zxing.net.bindings.windows.compatibility.nuspec"
       ]
+    },
+    "SistemaOmie.Shared/1.0.0": {
+      "type": "project",
+      "path": "../SistemaOmie.Shared/SistemaOmie.Shared.csproj",
+      "msbuildProject": "../SistemaOmie.Shared/SistemaOmie.Shared.csproj"
     }
   },
   "projectFileDependencyGroups": {
-    "net10.0-windows7.0": [
+    "net10.0-windows": [
       "BinaryKits.Zpl.Viewer >= 1.3.1",
       "Microsoft.Data.Sqlite >= 10.0.7",
       "PDFsharp >= 6.2.4",
       "PdfPig >= 0.1.14",
       "PdfiumViewer >= 2.13.0",
       "PdfiumViewer.Native.x86_64.v8-xfa >= 2018.4.8.256",
+      "SistemaOmie.Shared >= 1.0.0",
       "SkiaSharp >= 3.119.2",
       "Tesseract >= 5.2.0",
       "ZXing.Net >= 0.16.11",
@@ -2165,10 +2191,14 @@
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
-        "net10.0-windows7.0": {
+        "net10.0-windows": {
           "framework": "net10.0-windows7.0",
           "targetAlias": "net10.0-windows",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaOmie.Shared\\SistemaOmie.Shared.csproj": {
+              "projectPath": "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaOmie.Shared\\SistemaOmie.Shared.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
@@ -2181,10 +2211,10 @@
         "auditLevel": "low",
         "auditMode": "all"
       },
-      "SdkAnalysisLevel": "10.0.200"
+      "SdkAnalysisLevel": "10.0.300"
     },
     "frameworks": {
-      "net10.0-windows7.0": {
+      "net10.0-windows": {
         "framework": "net10.0-windows7.0",
         "targetAlias": "net10.0-windows",
         "dependencies": {
@@ -2243,15 +2273,15 @@
         "downloadDependencies": [
           {
             "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[10.0.7, 10.0.7]"
+            "version": "[10.0.9, 10.0.9]"
           },
           {
             "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[10.0.7, 10.0.7]"
+            "version": "[10.0.9, 10.0.9]"
           },
           {
             "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[10.0.7, 10.0.7]"
+            "version": "[10.0.9, 10.0.9]"
           }
         ],
         "frameworkReferences": {
@@ -2262,7 +2292,7 @@
             "privateAssets": "none"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.203/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",
@@ -2562,6 +2592,17 @@
     }
   },
   "logs": [
+    {
+      "code": "NU1903",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "O pacote 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 tem uma alta vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-2m69-gcr7-jv3q",
+      "libraryId": "SQLitePCLRaw.lib.e_sqlite3",
+      "targetGraphs": [
+        "net10.0-windows",
+        "net10.0-windows/win-x64"
+      ]
+    },
     {
       "code": "NU1701",
       "level": "Warning",

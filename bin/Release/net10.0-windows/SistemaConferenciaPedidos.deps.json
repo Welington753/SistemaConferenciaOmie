@@ -13,6 +13,7 @@
           "PDFsharp": "6.2.4",
           "PdfPig": "0.1.14",
           "PdfiumViewer": "2.13.0",
+          "SistemaOmie.Shared": "1.0.0",
           "SkiaSharp": "3.119.2",
           "Tesseract": "5.2.0",
           "ZXing.Net": "0.16.11",
@@ -582,6 +583,14 @@
             "fileVersion": "0.16.14.0"
           }
         }
+      },
+      "SistemaOmie.Shared/1.0.0": {
+        "runtime": {
+          "SistemaOmie.Shared.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -772,6 +781,11 @@
       "sha512": "sha512-bJw1qjpNJ8JmDP55UBAvA5bCU+vSEGua4z43nukJqMlrpkKu6mTw6NZGJZntM8KbNQ3RNLu8DJMJBSWUd0ifYg==",
       "path": "zxing.net.bindings.windows.compatibility/0.16.14",
       "hashPath": "zxing.net.bindings.windows.compatibility.0.16.14.nupkg.sha512"
+    },
+    "SistemaOmie.Shared/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
     }
   }
 }

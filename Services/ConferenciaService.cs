@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -47,6 +47,9 @@ namespace SistemaConferenciaPedidos.Services
 
                     if (numeroPedido.Equals(numeroBuscado, StringComparison.OrdinalIgnoreCase))
                     {
+                        if (!string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta))
+                            continue; // Regra: Não permitir bypass de etiqueta válida
+
                         encontradoPorNumeroPedido = true;
                         return pedido;
                     }
@@ -62,19 +65,11 @@ namespace SistemaConferenciaPedidos.Services
                 return "";
 
             string valor = codigo.Trim().ToUpperInvariant();
-            valor = Regex.Replace(valor, @"\s+", "");
+            
+            // Remove espaços, CR, LF, TAB e caracteres de controle
+            valor = Regex.Replace(valor, @"[\s\p{C}]+", "");
 
-            if (Regex.IsMatch(valor, @"^BR[A-Z0-9]{13}$", RegexOptions.IgnoreCase))
-                return valor;
-
-            if (Regex.IsMatch(valor, @"^TBR\d+$", RegexOptions.IgnoreCase))
-                return valor;
-
-            string somenteNumeros = Regex.Replace(valor, @"\D", "");
-            if (!string.IsNullOrWhiteSpace(somenteNumeros))
-                return somenteNumeros;
-
-            return Regex.Replace(valor, @"[^A-Z0-9]", "");
+            return valor;
         }
 
         public string NormalizarNumeroPedido(string valor)

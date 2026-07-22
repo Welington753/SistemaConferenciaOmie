@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,9 +11,8 @@ namespace SistemaConferenciaPedidos.Services
 {
     public class ShopeePdfService
     {
-        public List<EtiquetaShopeePdf> CarregarEtiquetasDoZip(ZipArchive zip, out string nomePdfNoZip)
+        public List<EtiquetaShopeePdf> CarregarEtiquetasDoZip(ZipArchive zip)
         {
-            nomePdfNoZip = "";
             var etiquetas = new List<EtiquetaShopeePdf>();
 
             if (zip == null)
@@ -25,7 +24,6 @@ namespace SistemaConferenciaPedidos.Services
 
             foreach (var entry in pdfs)
             {
-                nomePdfNoZip = entry.FullName;
 
                 using var stream = entry.Open();
                 using var ms = new MemoryStream();
@@ -55,7 +53,8 @@ namespace SistemaConferenciaPedidos.Services
                         CodigoRastreio = rastreio,
                         NomeCliente = nomeCliente,
                         Pagina = page.Number,
-                        TextoPagina = textoPagina
+                        TextoPagina = textoPagina,
+                        NomeArquivoOrigem = entry.FullName
                     });
                 }
             }

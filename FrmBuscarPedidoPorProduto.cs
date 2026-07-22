@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Models;
 using SistemaConferenciaPedidos.Repositories;
 using SistemaConferenciaPedidos.Services;
 using System;
@@ -11,6 +11,8 @@ namespace SistemaConferenciaPedidos
     public partial class FrmBuscarPedidoPorProduto : Form
     {
         private readonly Action<PedidoConferencia> _aoConfirmarImpressao;
+        private readonly DateTime _dataInicial;
+        private readonly DateTime _dataFinal;
 
         private readonly PedidoProdutoBuscaService _pedidoProdutoBuscaService =
             new PedidoProdutoBuscaService();
@@ -20,9 +22,11 @@ namespace SistemaConferenciaPedidos
 
         public PedidoConferencia PedidoSelecionado { get; private set; }
 
-        public FrmBuscarPedidoPorProduto(Action<PedidoConferencia> aoConfirmarImpressao)
+        public FrmBuscarPedidoPorProduto(DateTime dataInicial, DateTime dataFinal, Action<PedidoConferencia> aoConfirmarImpressao)
         {
             InitializeComponent();
+            _dataInicial = dataInicial;
+            _dataFinal = dataFinal;
 
             KeyPreview = true;
 
@@ -100,7 +104,9 @@ namespace SistemaConferenciaPedidos
                 return;
             }
 
-            var pedidos = _pedidoRepository.ObterTodos();
+            var pedidos = _pedidoRepository.ObterPorPeriodo(_dataInicial, _dataFinal.AddDays(1))
+                .Where(p => p.Status != "Cancelado")
+                .ToList();
 
             var encontrados = _pedidoProdutoBuscaService
                 .BuscarPedidosPorEanOuSku(pedidos, codigo);

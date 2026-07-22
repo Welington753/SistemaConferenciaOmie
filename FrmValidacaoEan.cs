@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -42,6 +42,7 @@ namespace SistemaConferenciaPedidos
             }
 
             InitializeComponent();
+            KeyPreview = true;
 
             lblTitulo.Text = $"Pedido: {numeroPedido}   |   Cliente: {nomeCliente}";
             AtualizarTela();
@@ -50,7 +51,33 @@ namespace SistemaConferenciaPedidos
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            txtLeitura.Focus();
+            ReposicionarFocoPesquisa();
+        }
+
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            base.OnKeyPress(e);
+
+            if (!txtLeitura.Focused)
+            {
+                if (char.IsControl(e.KeyChar)) return;
+
+                txtLeitura.Focus();
+                txtLeitura.AppendText(e.KeyChar.ToString());
+                e.Handled = true;
+            }
+        }
+
+        private void ReposicionarFocoPesquisa()
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (txtLeitura.Enabled && !txtLeitura.ReadOnly)
+                {
+                    txtLeitura.Focus();
+                    txtLeitura.SelectAll();
+                }
+            }));
         }
 
         private void txtLeitura_KeyDown(object sender, KeyEventArgs e)
@@ -58,6 +85,7 @@ namespace SistemaConferenciaPedidos
             if (e.KeyCode == Keys.Enter)
             {
                 e.SuppressKeyPress = true;
+                e.Handled = true;
                 ProcessarLeitura();
             }
         }
@@ -74,10 +102,12 @@ namespace SistemaConferenciaPedidos
             string lido = SomenteNumeros(textoOriginal);
 
             txtLeitura.Clear();
-            txtLeitura.Focus();
 
             if (string.IsNullOrWhiteSpace(lido))
+            {
+                ReposicionarFocoPesquisa();
                 return;
+            }
 
             // SENHA / CÓDIGO DE LIBERAÇÃO MANUAL
             if (lido == "0051000012517")
@@ -96,6 +126,7 @@ namespace SistemaConferenciaPedidos
             {
                 System.Media.SystemSounds.Exclamation.Play();
                 lstHistorico.Items.Insert(0, $"❌ NÃO CONFERE: {lido}");
+                ReposicionarFocoPesquisa();
                 return;
             }
 
@@ -105,6 +136,7 @@ namespace SistemaConferenciaPedidos
             lstHistorico.Items.Insert(0, $"✅ OK: {item.Ean} | {item.Produto}");
 
             AtualizarTela();
+            ReposicionarFocoPesquisa();
 
             bool todosConferidos = _itens.All(x => x.Conferido);
 

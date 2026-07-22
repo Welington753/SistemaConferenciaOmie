@@ -34,6 +34,18 @@
   ],
   "logs": [
     {
+      "code": "NU1903",
+      "level": "Warning",
+      "message": "O pacote 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 tem uma alta vulnerabilidade de gravidade conhecida, https://github.com/advisories/GHSA-2m69-gcr7-jv3q",
+      "projectPath": "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\User\\Documents\\Visual Studio 18\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos\\SistemaConferenciaPedidos.csproj",
+      "libraryId": "SQLitePCLRaw.lib.e_sqlite3",
+      "targetGraphs": [
+        "net10.0-windows"
+      ]
+    },
+    {
       "code": "NU1701",
       "level": "Warning",
       "message": "O pacote 'PdfiumViewer 2.13.0' foi restaurado usando '.NETFramework,Version=v4.6.1, .NETFramework,Version=v4.6.2, .NETFramework,Version=v4.7, .NETFramework,Version=v4.7.1, .NETFramework,Version=v4.7.2, .NETFramework,Version=v4.8, .NETFramework,Version=v4.8.1' em vez da estrutura de destino do projeto 'net10.0-windows7.0'. Esse pacote pode não ser totalmente compatível com o seu projeto.",

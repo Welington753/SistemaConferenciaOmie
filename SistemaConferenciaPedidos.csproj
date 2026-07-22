@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -35,4 +35,4 @@
     <ProjectReference Include="..\SistemaOmie.Shared\SistemaOmie.Shared.csproj" />
   </ItemGroup>
 
-</Project>
+  <ItemGroup><InternalsVisibleTo Include="SistemaConferenciaPedidos.Tests" /></ItemGroup></Project>

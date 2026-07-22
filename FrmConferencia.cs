@@ -1,10 +1,10 @@
-using SistemaConferenciaPedidos.Models;
-using SistemaConferenciaPedidos.Repositories;
-using SistemaConferenciaPedidos.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Repositories;
+using SistemaConferenciaPedidos.Services;
 
 namespace SistemaConferenciaPedidos
 {
@@ -12,15 +12,24 @@ namespace SistemaConferenciaPedidos
     {
         private readonly IPedidoRepository _pedidoRepository = new PedidoRepositorySqlite();
         private readonly ConferenciaService _conferenciaService = new ConferenciaService();
+        private DateTime _ultimaLeitura = DateTime.MinValue;
+        private string _ultimoCodigoLido = string.Empty;
+        private readonly DateTime _dataOperacional;
 
-        public FrmConferencia()
+
+        public FrmConferencia(DateTime dataOperacional)
         {
             InitializeComponent();
+            _dataOperacional = dataOperacional.Date;
+            Text = $"Conferência — {_dataOperacional:dd/MM/yyyy}";
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+
+            if (cmbFiltroExibicao.Items.Count > 0)
+                cmbFiltroExibicao.SelectedIndex = 0;
 
             AtualizarTelaConferencia();
             txtLeitura.Focus();
@@ -36,16 +45,26 @@ namespace SistemaConferenciaPedidos
                 return;
             }
 
+            string codigoNormalizado = _conferenciaService.NormalizarCodigoConferencia(textoLido);
+
+            if ((DateTime.Now - _ultimaLeitura).TotalMilliseconds < 500 && _ultimoCodigoLido == codigoNormalizado)
+            {
+                txtLeitura.Clear();
+                txtLeitura.Focus();
+                return;
+            }
+            _ultimaLeitura = DateTime.Now;
+            _ultimoCodigoLido = codigoNormalizado;
+
             btnConferir.Enabled = false;
 
             try
             {
-                bool encontradoPorNumeroPedido;
+                var pedidosValidos = ObterPedidosValidosDoModoAtual();
 
-                var pedido = _conferenciaService.BuscarPedidoPorCodigoOuNumero(
-                    _pedidoRepository.ObterTodos(),
-                    textoLido,
-                    out encontradoPorNumeroPedido);
+                var pedido = pedidosValidos.FirstOrDefault(p =>
+                    !string.IsNullOrWhiteSpace(p.CodigoEtiqueta) &&
+                    _conferenciaService.NormalizarCodigoConferencia(p.CodigoEtiqueta) == codigoNormalizado);
 
                 if (pedido == null)
                 {
@@ -87,12 +106,40 @@ namespace SistemaConferenciaPedidos
             }
         }
 
+        private List<PedidoConferencia> ObterPedidosValidosDoModoAtual()
+        {
+            string filtro = cmbFiltroExibicao.SelectedItem?.ToString() ?? "Somente Impressos";
+
+            var pedidosBase = _pedidoRepository.ObterPorPeriodo(_dataOperacional, _dataOperacional.AddDays(1))
+                .Where(p => !string.IsNullOrWhiteSpace(p.Marketplace))
+                .Where(p => p.Status != "Cancelado")
+                .ToList();
+
+            if (filtro == "Somente Impressos")
+            {
+                return pedidosBase.Where(p => p.Impresso).ToList();
+            }
+
+            if (filtro == "Apenas Faltantes")
+            {
+                return pedidosBase.Where(p => p.Impresso && !p.Conferido).ToList();
+            }
+
+            return pedidosBase;
+        }
+
         private void AtualizarTelaConferencia()
         {
-            var pedidos = _pedidoRepository.ObterTodos();
+            var pedidos = ObterPedidosValidosDoModoAtual();
 
             AtualizarResumoConferencia(pedidos);
             AtualizarPedidosFaltantes(pedidos);
+        }
+
+        private void cmbFiltroExibicao_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            AtualizarTelaConferencia();
+            txtLeitura.Focus();
         }
 
         private void AtualizarResumoConferencia(List<PedidoConferencia> pedidos)

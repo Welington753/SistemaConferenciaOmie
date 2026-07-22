@@ -1,4 +1,4 @@
-﻿namespace SistemaConferenciaPedidos
+namespace SistemaConferenciaPedidos
 {
     partial class FrmConferencia
     {
@@ -42,6 +42,8 @@
             lblLeitura = new Label();
             txtLeitura = new TextBox();
             btnConferir = new Button();
+            lblFiltroExibicao = new Label();
+            cmbFiltroExibicao = new ComboBox();
             grpResumo = new GroupBox();
             lblResumoShopee = new Label();
             lblResumoAmazon = new Label();
@@ -95,6 +97,31 @@
             btnConferir.Text = "Conferir";
             btnConferir.UseVisualStyleBackColor = true;
             btnConferir.Click += btnConferir_Click;
+            // 
+            // lblFiltroExibicao
+            // 
+            lblFiltroExibicao.AutoSize = true;
+            lblFiltroExibicao.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            lblFiltroExibicao.Location = new Point(410, 28);
+            lblFiltroExibicao.Name = "lblFiltroExibicao";
+            lblFiltroExibicao.Size = new Size(130, 21);
+            lblFiltroExibicao.TabIndex = 6;
+            lblFiltroExibicao.Text = "Exibir Pedidos:";
+            // 
+            // cmbFiltroExibicao
+            // 
+            cmbFiltroExibicao.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbFiltroExibicao.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            cmbFiltroExibicao.FormattingEnabled = true;
+            cmbFiltroExibicao.Items.AddRange(new object[] {
+            "Somente Impressos",
+            "Todos do Dia",
+            "Apenas Faltantes"});
+            cmbFiltroExibicao.Location = new Point(545, 25);
+            cmbFiltroExibicao.Name = "cmbFiltroExibicao";
+            cmbFiltroExibicao.Size = new Size(173, 29);
+            cmbFiltroExibicao.TabIndex = 7;
+            cmbFiltroExibicao.SelectedIndexChanged += cmbFiltroExibicao_SelectedIndexChanged;
             // 
             // grpResumo
             // 
@@ -277,6 +304,8 @@
             Controls.Add(grpHistorico);
             Controls.Add(grpPedidosFaltantes);
             Controls.Add(grpResumo);
+            Controls.Add(cmbFiltroExibicao);
+            Controls.Add(lblFiltroExibicao);
             Controls.Add(btnConferir);
             Controls.Add(txtLeitura);
             Controls.Add(lblLeitura);
@@ -300,6 +329,8 @@
         private Label lblLeitura;
         private TextBox txtLeitura;
         private Button btnConferir;
+        private Label lblFiltroExibicao;
+        private ComboBox cmbFiltroExibicao;
         private GroupBox grpResumo;
         private Label lblResumoGeral;
         private Label lblResumoMl;

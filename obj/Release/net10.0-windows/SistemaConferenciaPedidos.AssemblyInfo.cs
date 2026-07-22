@@ -14,10 +14,11 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+637c6ceebfff96a0af2cd7ea2452915a8fec3ba6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3e05f9b25aef59a986892a193ec337f262179434")]
 [assembly: System.Reflection.AssemblyProductAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SistemaConferenciaPedidos")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("SistemaConferenciaPedidos.Tests")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
 

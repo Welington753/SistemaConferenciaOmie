@@ -1,12 +1,12 @@
-﻿using SistemaConferenciaPedidos.Helpers;
-using SistemaConferenciaPedidos.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using SistemaConferenciaPedidos.Helpers;
+using SistemaConferenciaPedidos.Models;
 
 namespace SistemaConferenciaPedidos.Services
 {
@@ -225,8 +225,8 @@ namespace SistemaConferenciaPedidos.Services
             return convertido;
         }
 
-    
-       
+
+
         public string ExtrairTextosFdDoZpl(string zpl)
         {
             if (string.IsNullOrWhiteSpace(zpl))
@@ -296,9 +296,9 @@ namespace SistemaConferenciaPedidos.Services
             return sb.ToString();
         }
 
-     
 
-   
+
+
 
         public string DetectarPlataformaEtiqueta(string zpl, string decodificado)
         {

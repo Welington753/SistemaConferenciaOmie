@@ -1,8 +1,15 @@
-﻿namespace SistemaConferenciaPedidos
+namespace SistemaConferenciaPedidos
 {
     partial class FrmPreparacaoPedidos
     {
         private System.ComponentModel.IContainer components = null;
+
+        private TableLayoutPanel layoutPrincipal;
+        private Panel panelTopo;
+        private Panel panelFiltros;
+        private Panel panelPedidos;
+        private Panel panelDetalhes;
+        private Panel panelItens;
 
         protected override void Dispose(bool disposing)
         {
@@ -16,6 +23,13 @@
 
         private void InitializeComponent()
         {
+            layoutPrincipal = new TableLayoutPanel();
+            panelTopo = new Panel();
+            panelFiltros = new Panel();
+            panelPedidos = new Panel();
+            panelDetalhes = new Panel();
+            panelItens = new Panel();
+
             lblTitulo = new Label();
             lblAtalhos = new Label();
             lblDataInicial = new Label();
@@ -23,6 +37,11 @@
             dtpDataInicial = new DateTimePicker();
             dtpDataFinal = new DateTimePicker();
             btnBuscarPedidos = new Button();
+            btnAtualizarPedidos = new Button();
+            btnSalvarPedido = new Button();
+            btnExcluirPedido = new Button();
+            btnAdministracao = new Button();
+            btnValidarVinculos = new Button();
             lblPedidos = new Label();
             dgvPedidos = new DataGridView();
             lblDetalhes = new Label();
@@ -34,282 +53,292 @@
             txtPedidoCliente = new TextBox();
             txtMarketplace = new TextBox();
             txtCodigoEtiqueta = new TextBox();
+            btnGerarEtiqueta = new Button();
+            btnImprimirPorProduto = new Button();
+            btnImprimirEtiqueta = new Button();
             lblItens = new Label();
             dgvItensPedido = new DataGridView();
-            btnGerarEtiqueta = new Button();
-            btnSalvarPedido = new Button();
-            btnImprimirEtiqueta = new Button();
-            btnAtualizarPedidos = new Button();
-            btnImprimirPorProduto = new Button();
+            panelResumo = new Panel();
+            lblResumoTotal = new Label();
+            lblResumoPreparados = new Label();
+            lblResumoFaltam = new Label();
+            lblResumoPercentual = new Label();
+            pbProgressoResumo = new ProgressBar();
 
             ((System.ComponentModel.ISupportInitialize)dgvPedidos).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvItensPedido).BeginInit();
             SuspendLayout();
 
+            // layoutPrincipal
+            layoutPrincipal.ColumnCount = 1;
+            layoutPrincipal.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layoutPrincipal.Dock = DockStyle.Fill;
+            layoutPrincipal.RowCount = 6;
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Absolute, 75F));
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Percent, 58F));
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F));
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Percent, 42F));
+            layoutPrincipal.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+
+            // panelTopo
+            panelTopo.Dock = DockStyle.Fill;
+            panelTopo.Controls.Add(lblTitulo);
+            panelTopo.Controls.Add(btnAdministracao);
+
             // lblTitulo
             lblTitulo.AutoSize = true;
             lblTitulo.Font = new Font("Segoe UI", 18F, FontStyle.Bold);
-            lblTitulo.Location = new Point(25, 20);
+            lblTitulo.Location = new Point(20, 18);
             lblTitulo.Name = "lblTitulo";
             lblTitulo.Size = new Size(275, 32);
-            lblTitulo.TabIndex = 0;
             lblTitulo.Text = "Preparação de Pedidos";
 
-            // lblDataInicial
+            panelFiltros.Dock = DockStyle.Fill;
+            panelFiltros.Controls.Add(lblDataInicial);
+            panelFiltros.Controls.Add(dtpDataInicial);
+            panelFiltros.Controls.Add(lblDataFinal);
+            panelFiltros.Controls.Add(dtpDataFinal);
+            panelFiltros.Controls.Add(btnBuscarPedidos);
+            panelFiltros.Controls.Add(btnAtualizarPedidos);
+            panelFiltros.Controls.Add(btnSalvarPedido);
+            panelFiltros.Controls.Add(btnValidarVinculos);
+
             lblDataInicial.AutoSize = true;
-            lblDataInicial.Font = new Font("Segoe UI", 10F);
-            lblDataInicial.Location = new Point(27, 75);
-            lblDataInicial.Name = "lblDataInicial";
-            lblDataInicial.Size = new Size(76, 19);
-            lblDataInicial.TabIndex = 1;
+            lblDataInicial.Location = new Point(20, 5);
             lblDataInicial.Text = "Data Inicial";
 
-            // dtpDataInicial
             dtpDataInicial.Format = DateTimePickerFormat.Short;
-            dtpDataInicial.Location = new Point(27, 100);
-            dtpDataInicial.Name = "dtpDataInicial";
+            dtpDataInicial.Location = new Point(20, 30);
             dtpDataInicial.Size = new Size(180, 23);
-            dtpDataInicial.TabIndex = 3;
 
-            // lblDataFinal
             lblDataFinal.AutoSize = true;
-            lblDataFinal.Font = new Font("Segoe UI", 10F);
-            lblDataFinal.Location = new Point(250, 75);
-            lblDataFinal.Name = "lblDataFinal";
-            lblDataFinal.Size = new Size(70, 19);
-            lblDataFinal.TabIndex = 2;
+            lblDataFinal.Location = new Point(240, 5);
             lblDataFinal.Text = "Data Final";
 
-            // dtpDataFinal
             dtpDataFinal.Format = DateTimePickerFormat.Short;
-            dtpDataFinal.Location = new Point(250, 100);
-            dtpDataFinal.Name = "dtpDataFinal";
+            dtpDataFinal.Location = new Point(240, 30);
             dtpDataFinal.Size = new Size(180, 23);
-            dtpDataFinal.TabIndex = 4;
+            dtpDataInicial.ValueChanged += dtpData_ValueChanged;
+            dtpDataFinal.ValueChanged += dtpData_ValueChanged;
 
-            // btnBuscarPedidos
-            btnBuscarPedidos.Location = new Point(460, 95);
-            btnBuscarPedidos.Name = "btnBuscarPedidos";
+            btnBuscarPedidos.Location = new Point(460, 25);
             btnBuscarPedidos.Size = new Size(150, 32);
-            btnBuscarPedidos.TabIndex = 5;
             btnBuscarPedidos.Text = "Buscar Pedidos";
             btnBuscarPedidos.UseVisualStyleBackColor = true;
             btnBuscarPedidos.Click += btnBuscarPedidos_Click;
 
-            // btnAtualizarPedidos
-            btnAtualizarPedidos.Location = new Point(639, 95);
-            btnAtualizarPedidos.Name = "btnAtualizarPedidos";
+            btnAtualizarPedidos.Location = new Point(630, 25);
             btnAtualizarPedidos.Size = new Size(150, 32);
-            btnAtualizarPedidos.TabIndex = 22;
             btnAtualizarPedidos.Text = "Atualizar Pedidos";
             btnAtualizarPedidos.UseVisualStyleBackColor = true;
             btnAtualizarPedidos.Click += btnAtualizarPedidos_Click;
 
-            // btnSalvarPedido
-            btnSalvarPedido.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnSalvarPedido.Location = new Point(820, 95);
-            btnSalvarPedido.Name = "btnSalvarPedido";
+            btnSalvarPedido.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnSalvarPedido.Location = new Point(800, 25);
             btnSalvarPedido.Size = new Size(180, 32);
-            btnSalvarPedido.TabIndex = 20;
             btnSalvarPedido.Text = "Importar Etiquetas do Lote";
             btnSalvarPedido.UseVisualStyleBackColor = true;
             btnSalvarPedido.Click += btnSalvarPedido_Click;
 
-            // lblPedidos
-            lblPedidos.AutoSize = true;
+            btnValidarVinculos.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnValidarVinculos.Location = new Point(1000, 25);
+            btnValidarVinculos.Size = new Size(180, 32);
+            btnValidarVinculos.Text = "Validar Vínculos do Dia";
+            btnValidarVinculos.UseVisualStyleBackColor = true;
+            btnValidarVinculos.Click += btnValidarVinculos_Click;
+
+            btnAdministracao.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            btnAdministracao.Location = new Point(320, 18);
+            btnAdministracao.Size = new Size(150, 32);
+            btnAdministracao.Text = "⚙ Administração";
+            btnAdministracao.UseVisualStyleBackColor = true;
+            btnAdministracao.Click += btnAdministracao_Click;
+
+            // panelPedidos
+            panelPedidos.Dock = DockStyle.Fill;
+            panelPedidos.Padding = new Padding(20, 0, 20, 5);
+            panelPedidos.Controls.Add(dgvPedidos);
+            panelPedidos.Controls.Add(panelResumo);
+            panelPedidos.Controls.Add(lblPedidos);
+            panelPedidos.Controls.Add(btnExcluirPedido);
+
+            lblPedidos.Dock = DockStyle.Top;
             lblPedidos.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            lblPedidos.Location = new Point(27, 145);
-            lblPedidos.Name = "lblPedidos";
-            lblPedidos.Size = new Size(155, 20);
-            lblPedidos.TabIndex = 6;
+            lblPedidos.Height = 28;
             lblPedidos.Text = "Pedidos encontrados";
 
-            // dgvPedidos
-            dgvPedidos.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            // panelResumo
+            panelResumo.Dock = DockStyle.Top;
+            panelResumo.Height = 32;
+            panelResumo.Controls.Add(lblResumoTotal);
+            panelResumo.Controls.Add(lblResumoPreparados);
+            panelResumo.Controls.Add(lblResumoFaltam);
+            panelResumo.Controls.Add(lblResumoPercentual);
+            panelResumo.Controls.Add(pbProgressoResumo);
+
+            lblResumoTotal.AutoSize = true;
+            lblResumoTotal.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            lblResumoTotal.ForeColor = Color.FromArgb(50, 50, 50);
+            lblResumoTotal.Location = new Point(0, 5);
+            lblResumoTotal.Text = "Total: 0";
+
+            lblResumoPreparados.AutoSize = true;
+            lblResumoPreparados.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            lblResumoPreparados.ForeColor = Color.ForestGreen;
+            lblResumoPreparados.Location = new Point(120, 5);
+            lblResumoPreparados.Text = "Preparados: 0";
+
+            lblResumoFaltam.AutoSize = true;
+            lblResumoFaltam.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            lblResumoFaltam.ForeColor = Color.DarkOrange;
+            lblResumoFaltam.Location = new Point(270, 5);
+            lblResumoFaltam.Text = "Faltam: 0";
+
+            lblResumoPercentual.AutoSize = true;
+            lblResumoPercentual.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            lblResumoPercentual.ForeColor = Color.FromArgb(30, 30, 30);
+            lblResumoPercentual.Location = new Point(390, 5);
+            lblResumoPercentual.Text = "Progresso: 0%";
+
+            pbProgressoResumo.Location = new Point(520, 5);
+            pbProgressoResumo.Size = new Size(200, 18);
+            pbProgressoResumo.Minimum = 0;
+            pbProgressoResumo.Maximum = 100;
+            pbProgressoResumo.Value = 0;
+
+            btnExcluirPedido.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnExcluirPedido.BackColor = Color.MistyRose;
+            btnExcluirPedido.Location = new Point(930, 0);
+            btnExcluirPedido.Size = new Size(130, 27);
+            btnExcluirPedido.Text = "Remover pedido";
+            btnExcluirPedido.UseVisualStyleBackColor = false;
+            btnExcluirPedido.Click += btnExcluirPedido_Click;
+            btnExcluirPedido.BringToFront();
+
+            dgvPedidos.Dock = DockStyle.Fill;
             dgvPedidos.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvPedidos.Location = new Point(27, 175);
             dgvPedidos.Name = "dgvPedidos";
-            dgvPedidos.Size = new Size(1040, 420);
-            dgvPedidos.TabIndex = 7;
             dgvPedidos.CellClick += dgvPedidos_CellClick;
 
-            // lblDetalhes
-            lblDetalhes.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            // panelDetalhes
+            panelDetalhes.Dock = DockStyle.Fill;
+            panelDetalhes.Padding = new Padding(20, 0, 20, 0);
+            panelDetalhes.Controls.Add(lblDetalhes);
+            panelDetalhes.Controls.Add(lblCliente);
+            panelDetalhes.Controls.Add(txtCliente);
+            panelDetalhes.Controls.Add(lblPedidoCliente);
+            panelDetalhes.Controls.Add(txtPedidoCliente);
+            panelDetalhes.Controls.Add(lblMarketplace);
+            panelDetalhes.Controls.Add(txtMarketplace);
+            panelDetalhes.Controls.Add(lblCodigoEtiqueta);
+            panelDetalhes.Controls.Add(txtCodigoEtiqueta);
+            panelDetalhes.Controls.Add(btnGerarEtiqueta);
+            panelDetalhes.Controls.Add(btnImprimirPorProduto);
+            panelDetalhes.Controls.Add(btnImprimirEtiqueta);
+
             lblDetalhes.AutoSize = true;
             lblDetalhes.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            lblDetalhes.Location = new Point(27, 610);
-            lblDetalhes.Name = "lblDetalhes";
-            lblDetalhes.Size = new Size(230, 20);
-            lblDetalhes.TabIndex = 8;
+            lblDetalhes.Location = new Point(20, 5);
             lblDetalhes.Text = "Detalhes do pedido selecionado";
 
-            // lblCliente
-            lblCliente.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             lblCliente.AutoSize = true;
-            lblCliente.Location = new Point(27, 645);
-            lblCliente.Name = "lblCliente";
-            lblCliente.Size = new Size(44, 15);
-            lblCliente.TabIndex = 9;
+            lblCliente.Location = new Point(20, 40);
             lblCliente.Text = "Cliente";
 
-            // txtCliente
-            txtCliente.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            txtCliente.Location = new Point(27, 663);
-            txtCliente.Name = "txtCliente";
+            txtCliente.Location = new Point(20, 58);
             txtCliente.ReadOnly = true;
             txtCliente.Size = new Size(450, 23);
-            txtCliente.TabIndex = 13;
 
-            // lblPedidoCliente
-            lblPedidoCliente.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             lblPedidoCliente.AutoSize = true;
-            lblPedidoCliente.Location = new Point(27, 690);
-            lblPedidoCliente.Name = "lblPedidoCliente";
-            lblPedidoCliente.Size = new Size(84, 15);
-            lblPedidoCliente.TabIndex = 10;
+            lblPedidoCliente.Location = new Point(20, 86);
             lblPedidoCliente.Text = "Pedido Cliente";
 
-            // txtPedidoCliente
-            txtPedidoCliente.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            txtPedidoCliente.Location = new Point(27, 708);
-            txtPedidoCliente.Name = "txtPedidoCliente";
+            txtPedidoCliente.Location = new Point(20, 104);
             txtPedidoCliente.ReadOnly = true;
             txtPedidoCliente.Size = new Size(450, 23);
-            txtPedidoCliente.TabIndex = 14;
 
-            // lblMarketplace
-            lblMarketplace.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             lblMarketplace.AutoSize = true;
-            lblMarketplace.Location = new Point(510, 645);
-            lblMarketplace.Name = "lblMarketplace";
-            lblMarketplace.Size = new Size(72, 15);
-            lblMarketplace.TabIndex = 11;
+            lblMarketplace.Location = new Point(500, 40);
             lblMarketplace.Text = "Marketplace";
 
-            // txtMarketplace
-            txtMarketplace.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            txtMarketplace.Location = new Point(510, 663);
-            txtMarketplace.Name = "txtMarketplace";
+            txtMarketplace.Location = new Point(500, 58);
             txtMarketplace.ReadOnly = true;
             txtMarketplace.Size = new Size(250, 23);
-            txtMarketplace.TabIndex = 15;
 
-            // lblCodigoEtiqueta
-            lblCodigoEtiqueta.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             lblCodigoEtiqueta.AutoSize = true;
-            lblCodigoEtiqueta.Location = new Point(510, 690);
-            lblCodigoEtiqueta.Name = "lblCodigoEtiqueta";
-            lblCodigoEtiqueta.Size = new Size(92, 15);
-            lblCodigoEtiqueta.TabIndex = 12;
+            lblCodigoEtiqueta.Location = new Point(500, 86);
             lblCodigoEtiqueta.Text = "Código Etiqueta";
 
-            // txtCodigoEtiqueta
-            txtCodigoEtiqueta.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            txtCodigoEtiqueta.Location = new Point(510, 708);
-            txtCodigoEtiqueta.Name = "txtCodigoEtiqueta";
+            txtCodigoEtiqueta.Location = new Point(500, 104);
             txtCodigoEtiqueta.ReadOnly = true;
             txtCodigoEtiqueta.Size = new Size(250, 23);
-            txtCodigoEtiqueta.TabIndex = 16;
 
-            // btnGerarEtiqueta
             btnGerarEtiqueta.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnGerarEtiqueta.Location = new Point(782, 650);
-            btnGerarEtiqueta.Name = "btnGerarEtiqueta";
+            btnGerarEtiqueta.Location = new Point(780, 45);
             btnGerarEtiqueta.Size = new Size(86, 77);
-            btnGerarEtiqueta.TabIndex = 19;
             btnGerarEtiqueta.Text = "Conferir";
             btnGerarEtiqueta.UseVisualStyleBackColor = true;
             btnGerarEtiqueta.Click += btnGerarEtiqueta_Click;
 
-            // btnImprimirPorProduto
             btnImprimirPorProduto.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnImprimirPorProduto.Location = new Point(874, 650);
-            btnImprimirPorProduto.Name = "btnImprimirPorProduto";
+            btnImprimirPorProduto.Location = new Point(875, 45);
             btnImprimirPorProduto.Size = new Size(86, 77);
-            btnImprimirPorProduto.TabIndex = 23;
             btnImprimirPorProduto.Text = "Imprimir por Produto";
             btnImprimirPorProduto.UseVisualStyleBackColor = true;
             btnImprimirPorProduto.Click += btnImprimirPorProduto_Click;
 
-            // btnImprimirEtiqueta
             btnImprimirEtiqueta.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnImprimirEtiqueta.Location = new Point(966, 650);
-            btnImprimirEtiqueta.Name = "btnImprimirEtiqueta";
+            btnImprimirEtiqueta.Location = new Point(970, 45);
             btnImprimirEtiqueta.Size = new Size(86, 77);
-            btnImprimirEtiqueta.TabIndex = 21;
             btnImprimirEtiqueta.Text = "Imprimir Etiqueta";
             btnImprimirEtiqueta.UseVisualStyleBackColor = true;
             btnImprimirEtiqueta.Click += btnImprimirEtiqueta_Click;
 
-            // lblItens
-            lblItens.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            lblItens.AutoSize = true;
+            // panelItens
+            panelItens.Dock = DockStyle.Fill;
+            panelItens.Padding = new Padding(20, 0, 20, 5);
+            panelItens.Controls.Add(dgvItensPedido);
+            panelItens.Controls.Add(lblItens);
+
+            lblItens.Dock = DockStyle.Top;
             lblItens.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            lblItens.Location = new Point(27, 745);
-            lblItens.Name = "lblItens";
-            lblItens.Size = new Size(118, 20);
-            lblItens.TabIndex = 17;
+            lblItens.Height = 28;
             lblItens.Text = "Itens do pedido";
 
-            // dgvItensPedido
-            dgvItensPedido.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            dgvItensPedido.Dock = DockStyle.Fill;
             dgvItensPedido.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvItensPedido.Location = new Point(27, 773);
             dgvItensPedido.Name = "dgvItensPedido";
-            dgvItensPedido.Size = new Size(1040, 90);
-            dgvItensPedido.TabIndex = 18;
 
             // lblAtalhos
-            lblAtalhos.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+            lblAtalhos.Dock = DockStyle.Fill;
             lblAtalhos.BorderStyle = BorderStyle.FixedSingle;
             lblAtalhos.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            lblAtalhos.Location = new Point(12, 875);
-            lblAtalhos.Name = "lblAtalhos";
-            lblAtalhos.Size = new Size(1060, 30);
-            lblAtalhos.TabIndex = 999;
-            lblAtalhos.Text = "ENTER = Imprimir Etiqueta    |    F4 = Buscar Produto    |    F5 = Atualizar Pedidos    |    F8 = Conferência    |    ESC = Limpar Seleção";
+            lblAtalhos.TextAlign = ContentAlignment.MiddleLeft;
+            lblAtalhos.Text = "  ENTER = Imprimir Etiqueta    |    DEL = Remover Pedido (ADM)    |    F4 = Buscar Produto    |    F5 = Atualizar Pedidos    |    F8 = Conferência";
+
+            layoutPrincipal.Controls.Add(panelTopo, 0, 0);
+            layoutPrincipal.Controls.Add(panelFiltros, 0, 1);
+            layoutPrincipal.Controls.Add(panelPedidos, 0, 2);
+            layoutPrincipal.Controls.Add(panelDetalhes, 0, 3);
+            layoutPrincipal.Controls.Add(panelItens, 0, 4);
+            layoutPrincipal.Controls.Add(lblAtalhos, 0, 5);
 
             // FrmPreparacaoPedidos
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1100, 920);
-            MinimumSize = new Size(1116, 959);
+            ClientSize = new Size(1100, 760);
+            MinimumSize = new Size(900, 600);
+            Controls.Add(layoutPrincipal);
             MaximizeBox = true;
             MinimizeBox = true;
             Name = "FrmPreparacaoPedidos";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Preparação de Pedidos";
 
-            Controls.Add(btnImprimirPorProduto);
-            Controls.Add(btnAtualizarPedidos);
-            Controls.Add(btnImprimirEtiqueta);
-            Controls.Add(btnSalvarPedido);
-            Controls.Add(btnGerarEtiqueta);
-            Controls.Add(dgvItensPedido);
-            Controls.Add(lblItens);
-            Controls.Add(txtCodigoEtiqueta);
-            Controls.Add(txtMarketplace);
-            Controls.Add(txtPedidoCliente);
-            Controls.Add(txtCliente);
-            Controls.Add(lblCodigoEtiqueta);
-            Controls.Add(lblMarketplace);
-            Controls.Add(lblPedidoCliente);
-            Controls.Add(lblCliente);
-            Controls.Add(lblDetalhes);
-            Controls.Add(dgvPedidos);
-            Controls.Add(lblPedidos);
-            Controls.Add(btnBuscarPedidos);
-            Controls.Add(dtpDataFinal);
-            Controls.Add(dtpDataInicial);
-            Controls.Add(lblDataFinal);
-            Controls.Add(lblAtalhos);
-            Controls.Add(lblDataInicial);
-            Controls.Add(lblTitulo);
-
             ((System.ComponentModel.ISupportInitialize)dgvPedidos).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvItensPedido).EndInit();
             ResumeLayout(false);
-            PerformLayout();
         }
 
         #endregion
@@ -335,9 +364,18 @@
         private System.Windows.Forms.DataGridView dgvItensPedido;
         private System.Windows.Forms.Button btnGerarEtiqueta;
         private System.Windows.Forms.Button btnSalvarPedido;
+        private System.Windows.Forms.Button btnExcluirPedido;
         private System.Windows.Forms.Button btnImprimirEtiqueta;
         private Button btnAtualizarPedidos;
         private Button btnImprimirPorProduto;
+        private Button btnValidarVinculos;
+        private Button btnAdministracao;
         private Label lblAtalhos;
+        public System.Windows.Forms.Panel panelResumo;
+        public System.Windows.Forms.Label lblResumoTotal;
+        public System.Windows.Forms.Label lblResumoPreparados;
+        public System.Windows.Forms.Label lblResumoFaltam;
+        public System.Windows.Forms.Label lblResumoPercentual;
+        public System.Windows.Forms.ProgressBar pbProgressoResumo;
     }
 }

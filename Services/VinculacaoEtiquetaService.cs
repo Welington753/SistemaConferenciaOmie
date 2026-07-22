@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Helpers;
+using SistemaConferenciaPedidos.Helpers;
 using SistemaConferenciaPedidos.Models;
 using System;
 using System.Collections.Generic;
@@ -19,17 +19,12 @@ namespace SistemaConferenciaPedidos.Services
         public void VincularEtiquetas(
             List<EtiquetaMarketplaceLote> etiquetasLote,
             List<EtiquetaShopeePdf> etiquetasShopeePdf,
-            List<PedidoConferencia> pedidos)
+            List<PedidoConferencia> pedidos,
+            string caminhoZip = "")
         {
             if (etiquetasLote == null || pedidos == null)
                 return;
 
-            foreach (var pedido in pedidos)
-            {
-                pedido.EtiquetaMarketplaceZpl = null;
-                pedido.CodigoEtiqueta = null;
-                pedido.Status = "Sem etiqueta";
-            }
 
             var etiquetasDisponiveis = new List<EtiquetaMarketplaceLote>(etiquetasLote);
 
@@ -41,7 +36,42 @@ namespace SistemaConferenciaPedidos.Services
 
             foreach (var pedido in pedidosOrdenados)
             {
+                bool jaTemEtiqueta =
+                    !string.IsNullOrWhiteSpace(pedido.EtiquetaMarketplaceZpl) &&
+                    !string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta);
+
                 string marketplace = MarketplaceHelper.NormalizarMarketplace(pedido.Marketplace);
+
+                if (jaTemEtiqueta)
+                {
+                    // Cura de registro da Shopee (reimportação do ZIP para corrigir arquivo ausente)
+                    if (marketplace == "SHOPEE" && !string.IsNullOrWhiteSpace(caminhoZip))
+                    {
+                        var correspondencias = etiquetasShopeePdf?.Where(e =>
+                            TextoHelper.NormalizarTexto(e.PedidoShopee) == TextoHelper.NormalizarTexto(pedido.NumeroPedidoCliente))?.ToList();
+
+                        EtiquetaShopeePdf etiquetaPdf = null;
+                        if (correspondencias != null && correspondencias.Count > 0)
+                        {
+                            // Validar estritamente pelo código de rastreio/etiqueta (sem fallback aproximado)
+                            etiquetaPdf = correspondencias.FirstOrDefault(e => string.Equals(e.CodigoRastreio, pedido.CodigoEtiqueta, StringComparison.OrdinalIgnoreCase));
+                        }
+
+                        if (etiquetaPdf != null)
+                        {
+                            // Verifica se mais de um pedido não está usando a mesma página (unicidade)
+                            bool paginaEmUso = pedidos.Any(p => p != pedido && p.Marketplace == "SHOPEE" && p.NomePdfNoZip == etiquetaPdf.NomeArquivoOrigem && p.PaginaPdf == etiquetaPdf.Pagina);
+                            if (!paginaEmUso)
+                            {
+                                pedido.CaminhoZipImportacao = caminhoZip;
+                                pedido.NomePdfNoZip = etiquetaPdf.NomeArquivoOrigem;
+                                pedido.PaginaPdf = etiquetaPdf.Pagina;
+                                pedido.EtiquetaMarketplaceZpl = $"PDF_SHOPEE|{etiquetaPdf.NomeArquivoOrigem}|{etiquetaPdf.Pagina}";
+                            }
+                        }
+                    }
+                    continue;
+                }
 
                 if (marketplace == "SHOPEE")
                 {
@@ -51,9 +81,19 @@ namespace SistemaConferenciaPedidos.Services
 
                     if (etiquetaPdf != null)
                     {
-                        pedido.EtiquetaMarketplaceZpl = $"PDF_SHOPEE|{etiquetaPdf.Pagina}";
+                        pedido.EtiquetaMarketplaceZpl = $"PDF_SHOPEE|{etiquetaPdf.NomeArquivoOrigem}|{etiquetaPdf.Pagina}";
                         pedido.CodigoEtiqueta = etiquetaPdf.CodigoRastreio ?? "";
-                        pedido.Status = "Etiqueta vinculada";
+                        
+                        if (string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta))
+                            pedido.Status = "Etiqueta encontrada sem código";
+                        else
+                            pedido.Status = "Etiqueta vinculada";
+                            
+                        if (!string.IsNullOrWhiteSpace(caminhoZip))
+                            pedido.CaminhoZipImportacao = caminhoZip;
+
+                        pedido.NomePdfNoZip = etiquetaPdf.NomeArquivoOrigem;
+                        pedido.PaginaPdf = etiquetaPdf.Pagina;
                     }
 
                     continue;
@@ -66,7 +106,14 @@ namespace SistemaConferenciaPedidos.Services
                 {
                     pedido.EtiquetaMarketplaceZpl = etiqueta.ConteudoZpl;
                     pedido.CodigoEtiqueta = ExtrairCodigoEtiquetaDoZpl(etiqueta.ConteudoZpl, pedido.Marketplace);
-                    pedido.Status = "Etiqueta vinculada";
+                    
+                    if (string.IsNullOrWhiteSpace(pedido.CodigoEtiqueta))
+                        pedido.Status = "Etiqueta encontrada sem código";
+                    else
+                        pedido.Status = "Etiqueta vinculada";
+                        
+                    if (!string.IsNullOrWhiteSpace(caminhoZip))
+                        pedido.CaminhoZipImportacao = caminhoZip;
 
                     etiquetasDisponiveis.Remove(etiqueta);
                 }
@@ -82,6 +129,12 @@ namespace SistemaConferenciaPedidos.Services
                 return false;
 
             string marketplaceNormalizado = MarketplaceHelper.NormalizarMarketplace(marketplace);
+            
+            if (!string.IsNullOrWhiteSpace(etiqueta.PlataformaDetectada))
+            {
+                if (MarketplaceHelper.NormalizarMarketplace(etiqueta.PlataformaDetectada) != marketplaceNormalizado)
+                    return false;
+            }
             string numeroOriginal = (numeroPedidoCliente ?? "").Trim();
 
             string numeroNormalizado = TextoHelper.NormalizarTexto(numeroOriginal);
@@ -95,17 +148,20 @@ namespace SistemaConferenciaPedidos.Services
             string decodificadoNormalizado = TextoHelper.NormalizarTexto(decodificado);
             string decodificadoSemCaracteres = TextoHelper.SomenteLetrasENumeros(decodificado);
 
-            if (!string.IsNullOrWhiteSpace(numeroNormalizado))
+            if (marketplaceNormalizado != "MERCADO LIVRE")
             {
-                if (zplNormalizado.Contains(numeroNormalizado) || decodificadoNormalizado.Contains(numeroNormalizado))
-                    return true;
-            }
+                if (!string.IsNullOrWhiteSpace(numeroNormalizado))
+                {
+                    if (zplNormalizado.Contains(numeroNormalizado) || decodificadoNormalizado.Contains(numeroNormalizado))
+                        return true;
+                }
 
-            if (!string.IsNullOrWhiteSpace(numeroSemCaracteres))
-            {
-                if (zplSemCaracteres.Contains(numeroSemCaracteres) ||
-                    decodificadoSemCaracteres.Contains(numeroSemCaracteres))
-                    return true;
+                if (!string.IsNullOrWhiteSpace(numeroSemCaracteres))
+                {
+                    if (zplSemCaracteres.Contains(numeroSemCaracteres) ||
+                        decodificadoSemCaracteres.Contains(numeroSemCaracteres))
+                        return true;
+                }
             }
 
             if (marketplaceNormalizado == "MERCADO LIVRE" &&
@@ -150,20 +206,19 @@ namespace SistemaConferenciaPedidos.Services
 
             if ((marketplace ?? "").Trim().Equals("Amazon", StringComparison.OrdinalIgnoreCase))
             {
-                string textoAmazon = (texto + "\n" + zpl).ToUpperInvariant();
+                // Algumas etiquetas Amazon guardam o código dentro dos campos ^FD
+                // usando hexadecimal. Por isso juntamos o texto decodificado,
+                // os campos ^FD decodificados e o ZPL bruto.
+                string textosFd = _etiquetaService.ExtrairTextosFdDoZpl(zpl);
+                string textoAmazon = (
+                    texto + "\n" +
+                    textosFd + "\n" +
+                    zpl).ToUpperInvariant();
 
-                var amazon = Regex.Match(textoAmazon, @"AMZB[A-Z0-9]+", RegexOptions.IgnoreCase);
-                if (amazon.Success)
-                    return amazon.Value.Trim().ToUpperInvariant();
+                string codigoAmazon = ExtrairCodigoAmazon(textoAmazon, textosFd);
 
-                amazon = Regex.Match(textoAmazon, @"TBR[A-Z0-9]+", RegexOptions.IgnoreCase);
-                if (amazon.Success)
-                    return amazon.Value.Trim().ToUpperInvariant();
-
-                string limpo = Regex.Replace(textoAmazon, @"[^A-Z0-9]", "");
-                amazon = Regex.Match(limpo, @"AMZB[A-Z0-9]+", RegexOptions.IgnoreCase);
-                if (amazon.Success)
-                    return amazon.Value.Trim().ToUpperInvariant();
+                if (!string.IsNullOrWhiteSpace(codigoAmazon))
+                    return codigoAmazon;
             }
 
             if ((marketplace ?? "").Trim().Equals("Mercado Livre", StringComparison.OrdinalIgnoreCase))
@@ -176,6 +231,64 @@ namespace SistemaConferenciaPedidos.Services
                     if (!string.IsNullOrWhiteSpace(numeros))
                         return numeros;
                 }
+            }
+
+            return "";
+        }
+
+        private string ExtrairCodigoAmazon(string textoAmazon, string textosFd)
+        {
+            if (string.IsNullOrWhiteSpace(textoAmazon))
+                return "";
+
+            // Formato antigo utilizado nas etiquetas Amazon.
+            var amazon = Regex.Match(
+                textoAmazon,
+                @"(?<![A-Z0-9])TBR[A-Z0-9]{6,24}(?![A-Z0-9])",
+                RegexOptions.IgnoreCase);
+
+            if (amazon.Success)
+                return amazon.Value.Trim().ToUpperInvariant();
+
+            // Formato atual. Antes o sistema aceitava somente AMZB.
+            // Agora aceita qualquer código iniciado por AMZ, incluindo AMZB e AMZL.
+            amazon = Regex.Match(
+                textoAmazon,
+                @"(?<![A-Z0-9])AMZ[A-Z0-9]{6,24}(?![A-Z0-9])",
+                RegexOptions.IgnoreCase);
+
+            if (amazon.Success)
+                return amazon.Value.Trim().ToUpperInvariant();
+
+            // Se houver separadores entre os caracteres, limpa cada campo ^FD
+            // individualmente para não juntar informações diferentes da etiqueta.
+            string[] camposFd = (textosFd ?? "")
+                .Split(
+                    new[] { "\r\n", "\n", "\r" },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (string campo in camposFd)
+            {
+                string campoLimpo = Regex.Replace(
+                    (campo ?? "").ToUpperInvariant(),
+                    @"[^A-Z0-9]",
+                    "");
+
+                amazon = Regex.Match(
+                    campoLimpo,
+                    @"TBR[A-Z0-9]{6,24}",
+                    RegexOptions.IgnoreCase);
+
+                if (amazon.Success)
+                    return amazon.Value.Trim().ToUpperInvariant();
+
+                amazon = Regex.Match(
+                    campoLimpo,
+                    @"AMZ[A-Z0-9]{6,24}",
+                    RegexOptions.IgnoreCase);
+
+                if (amazon.Success)
+                    return amazon.Value.Trim().ToUpperInvariant();
             }
 
             return "";

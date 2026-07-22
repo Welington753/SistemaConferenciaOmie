@@ -1,4 +1,4 @@
-﻿using BinaryKits.Zpl.Viewer;
+using BinaryKits.Zpl.Viewer;
 using SistemaConferenciaPedidos.Models;
 using System;
 using System.Drawing;
@@ -11,7 +11,16 @@ namespace SistemaConferenciaPedidos.Services
 {
     public class ImpressaoService
     {
-        public void ImprimirZplComoImagem(string zpl)
+        private readonly IPrinterEnvironment _printerEnvironment;
+
+        public ImpressaoService() : this(new WindowsPrinterEnvironment()) { }
+
+        public ImpressaoService(IPrinterEnvironment printerEnvironment)
+        {
+            _printerEnvironment = printerEnvironment ?? new WindowsPrinterEnvironment();
+        }
+
+        public ResultadoImpressao ImprimirZplComoImagem(string zpl)
         {
             IPrinterStorage printerStorage = new PrinterStorage();
             var analyzer = new ZplAnalyzer(printerStorage);
@@ -21,16 +30,14 @@ namespace SistemaConferenciaPedidos.Services
 
             if (analyzeInfo == null || analyzeInfo.LabelInfos == null || !analyzeInfo.LabelInfos.Any())
             {
-                MessageBox.Show("Não foi possível converter a etiqueta ZPL.");
-                return;
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Não foi possível converter a etiqueta ZPL.");
             }
 
             byte[] imageData = drawer.Draw(analyzeInfo.LabelInfos.First().ZplElements);
 
             if (imageData == null || imageData.Length == 0)
             {
-                MessageBox.Show("A imagem da etiqueta ficou vazia.");
-                return;
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "A imagem da etiqueta ficou vazia.");
             }
 
             using var ms = new MemoryStream(imageData);
@@ -73,12 +80,12 @@ namespace SistemaConferenciaPedidos.Services
 
             var impressoraTermica = ObterImpressoraTermicaPreferida();
             if (impressoraTermica == null)
-                return;
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ImpressoraNaoEncontrada, "A impressora térmica configurada não foi encontrada. Verifique a conexão ou selecione novamente a impressora na Administração.");
 
             pd.PrinterSettings.PrinterName = impressoraTermica.PrinterName;
 
             if (!pd.PrinterSettings.IsValid)
-                throw new Exception("A impressora térmica encontrada não está válida para impressão.");
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ImpressoraNaoEncontrada, "A impressora térmica encontrada não está válida para impressão.");
 
             pd.DefaultPageSettings.PrinterSettings.PrinterName = impressoraTermica.PrinterName;
             pd.PrinterSettings.DefaultPageSettings.PrinterSettings.PrinterName = impressoraTermica.PrinterName;
@@ -97,51 +104,120 @@ namespace SistemaConferenciaPedidos.Services
             };
 
             pd.Print();
+            return ResultadoImpressao.Ok("ZPL", impressoraTermica.PrinterName);
         }
 
-        public void ImprimirPedido(PedidoConferencia pedido, string caminhoZip, string nomePdfNoZip)
+        public virtual ResultadoImpressao ImprimirPedido(
+    PedidoConferencia pedido,
+    string caminhoZip,
+    string caminhoPdfMercadoLivre)
         {
             if (pedido == null)
-                throw new Exception("Pedido não informado.");
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Pedido não informado.");
 
             string etiqueta = (pedido.EtiquetaMarketplaceZpl ?? "").Trim();
 
             if (string.IsNullOrWhiteSpace(etiqueta))
-                throw new Exception("O pedido não possui etiqueta vinculada.");
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "O pedido não possui etiqueta vinculada.");
 
             string marketplace = (pedido.Marketplace ?? "").Trim();
 
             if (marketplace.Equals("Shopee", StringComparison.OrdinalIgnoreCase) &&
                 etiqueta.StartsWith("PDF_SHOPEE|", StringComparison.OrdinalIgnoreCase))
             {
-                ImprimirEtiquetaShopeePdf(pedido, caminhoZip, nomePdfNoZip);
-                return;
+                return ImprimirEtiquetaShopeePdf(pedido, caminhoZip);
             }
 
-            ImprimirZplComoImagem(etiqueta);
+            if (marketplace.Equals(
+        "Mercado Livre",
+        StringComparison.OrdinalIgnoreCase) &&
+    etiqueta.StartsWith(
+        "PDF_MELI|",
+        StringComparison.OrdinalIgnoreCase))
+            {
+                return ImprimirEtiquetaMercadoLivrePdf(
+                    pedido,
+                    caminhoPdfMercadoLivre);
+            }
+
+            return ImprimirZplComoImagem(etiqueta);
         }
 
-        public void ImprimirEtiquetaShopeePdf(PedidoConferencia pedido, string caminhoZip, string nomePdfNoZip)
+        public ResultadoImpressao ImprimirEtiquetaMercadoLivrePdf(
+    PedidoConferencia pedido,
+    string caminhoPdfMercadoLivre)
+        {
+            if (pedido == null)
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Pedido não informado.");
+
+            if (string.IsNullOrWhiteSpace(caminhoPdfMercadoLivre) ||
+                !File.Exists(caminhoPdfMercadoLivre))
+            {
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ArquivoAusente, "O PDF do Mercado Livre não está carregado. Importe novamente.");
+            }
+
+            string referencia =
+                pedido.EtiquetaMarketplaceZpl ?? "";
+
+            if (!referencia.StartsWith("PDF_MELI|", StringComparison.OrdinalIgnoreCase))
+            {
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "O pedido não possui uma página de PDF do Mercado Livre vinculada.");
+            }
+
+            string paginaTexto = referencia
+                .Replace(
+                    "PDF_MELI|",
+                    "",
+                    StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            if (!int.TryParse(paginaTexto, out int pagina))
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Página do PDF Mercado Livre inválida.");
+
+            using var bitmapOriginal =
+                RenderizarPaginaPdfComoBitmap(
+                    caminhoPdfMercadoLivre,
+                    pagina);
+
+            if (bitmapOriginal == null)
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.FalhaAoPreparar, "Não foi possível renderizar a página do PDF.");
+
+            using var bitmapCortado =
+                CortarMargensBrancas(bitmapOriginal);
+
+            if (bitmapCortado == null)
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.FalhaAoPreparar, "Não foi possível preparar a etiqueta para impressão.");
+
+            var resultado = ImprimirBitmapNaTermica(bitmapCortado);
+            if (!resultado.Sucesso) return resultado;
+            
+            return ResultadoImpressao.Ok("MercadoLivre_PDF", resultado.Impressora);
+        }
+
+        public ResultadoImpressao ImprimirEtiquetaShopeePdf(PedidoConferencia pedido, string caminhoZip)
         {
             try
             {
                 if (pedido == null)
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Pedido nulo.");
 
                 if (string.IsNullOrWhiteSpace(caminhoZip) || !File.Exists(caminhoZip))
-                    return;
-
-                if (string.IsNullOrWhiteSpace(nomePdfNoZip))
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.ArquivoAusente, "ZIP não encontrado.");
 
                 if (string.IsNullOrWhiteSpace(pedido.EtiquetaMarketplaceZpl) ||
                     !pedido.EtiquetaMarketplaceZpl.StartsWith("PDF_SHOPEE|", StringComparison.OrdinalIgnoreCase))
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Referência da Shopee inválida.");
 
-                string paginaTexto = pedido.EtiquetaMarketplaceZpl.Replace("PDF_SHOPEE|", "").Trim();
+                string[] partesShopee = pedido.EtiquetaMarketplaceZpl.Split('|');
+                
+                if (partesShopee.Length < 3)
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Formato da referência Shopee inválido.");
+
+                string nomePdfCorreto = partesShopee[1];
+                string paginaTexto = partesShopee[2];
 
                 if (!int.TryParse(paginaTexto, out int pagina))
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Página da Shopee inválida.");
 
                 string pastaTemp = Path.Combine(Path.GetTempPath(), "SistemaConferenciaPedidos");
                 Directory.CreateDirectory(pastaTemp);
@@ -151,10 +227,10 @@ namespace SistemaConferenciaPedidos.Services
                 using (var zip = System.IO.Compression.ZipFile.OpenRead(caminhoZip))
                 {
                     var entryPdf = zip.Entries.FirstOrDefault(e =>
-                        e.FullName.Equals(nomePdfNoZip, StringComparison.OrdinalIgnoreCase));
+                        e.FullName.Equals(nomePdfCorreto, StringComparison.OrdinalIgnoreCase));
 
                     if (entryPdf == null)
-                        return;
+                        return ResultadoImpressao.Falha(StatusResultadoImpressao.ArquivoAusente, "PDF não encontrado dentro do ZIP.");
 
                     using var stream = entryPdf.Open();
                     using var fs = new FileStream(caminhoPdfOriginal, FileMode.Create, FileAccess.Write);
@@ -164,18 +240,21 @@ namespace SistemaConferenciaPedidos.Services
                 using var bitmapOriginal = RenderizarPaginaPdfComoBitmap(caminhoPdfOriginal, pagina);
 
                 if (bitmapOriginal == null)
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.FalhaAoPreparar, "Falha ao renderizar PDF Shopee.");
 
                 using var bitmapCortado = CortarMargensBrancas(bitmapOriginal);
 
                 if (bitmapCortado == null)
-                    return;
+                    return ResultadoImpressao.Falha(StatusResultadoImpressao.FalhaAoPreparar, "Falha ao cortar margens do PDF Shopee.");
 
-                ImprimirBitmapNaTermica(bitmapCortado);
+                var resultado = ImprimirBitmapNaTermica(bitmapCortado);
+                if (!resultado.Sucesso) return resultado;
+                
+                return ResultadoImpressao.Ok("Shopee_PDF", resultado.Impressora);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao imprimir etiqueta Shopee: " + ex.Message);
+                return ResultadoImpressao.Desconhecido("Erro ao imprimir etiqueta Shopee: " + ex.Message, ex);
             }
         }
         private Bitmap RenderizarPaginaPdfComoBitmap(string caminhoPdf, int numeroPagina)
@@ -252,21 +331,21 @@ namespace SistemaConferenciaPedidos.Services
             return original.Clone(area, original.PixelFormat);
         }
 
-        private void ImprimirBitmapNaTermica(Bitmap bitmap)
+        public virtual ResultadoImpressao ImprimirBitmapNaTermica(Bitmap bitmap)
         {
             if (bitmap == null)
-                return;
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Falha ao preparar: bitmap está nulo.");
 
             using PrintDocument pd = new PrintDocument();
 
             var impressoraTermica = ObterImpressoraTermicaPreferida();
             if (impressoraTermica == null)
-                return;
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ImpressoraNaoEncontrada, "A impressora térmica configurada não foi encontrada. Verifique a conexão ou selecione novamente a impressora na Administração.");
 
             pd.PrinterSettings.PrinterName = impressoraTermica.PrinterName;
 
-            if (!pd.PrinterSettings.IsValid)
-                throw new Exception("A impressora térmica encontrada não está válida.");
+            if (!_printerEnvironment.ConfiguracaoValida(impressoraTermica.PrinterName))
+                return ResultadoImpressao.Falha(StatusResultadoImpressao.ImpressoraNaoEncontrada, "A impressora térmica configurada não está válida.");
 
             pd.DefaultPageSettings.PrinterSettings.PrinterName = impressoraTermica.PrinterName;
             pd.DefaultPageSettings.PaperSize = new PaperSize("4x6", 400, 600);
@@ -287,11 +366,21 @@ namespace SistemaConferenciaPedidos.Services
                 e.HasMorePages = false;
             };
 
-            pd.Print();
+            try
+            {
+                pd.Print();
+                return ResultadoImpressao.Ok("Bitmap", impressoraTermica.PrinterName);
+            }
+            catch (Exception ex)
+            {
+                return ResultadoImpressao.Desconhecido("Erro desconhecido durante o envio à fila: " + ex.Message, ex);
+            }
         }
         public PrinterSettings ObterImpressoraTermicaPreferida()
         {
-            var nomes = PrinterSettings.InstalledPrinters.Cast<string>().ToList();
+            try
+            {
+                var nomes = _printerEnvironment.ObterImpressorasInstaladas().ToList();
 
             string[] nomesPreferidos =
             {
@@ -310,23 +399,15 @@ namespace SistemaConferenciaPedidos.Services
 
                 if (!string.IsNullOrWhiteSpace(encontrada))
                 {
-                    var settings = new PrinterSettings
-                    {
-                        PrinterName = encontrada
-                    };
-
-                    if (settings.IsValid)
-                        return settings;
+                    if (_printerEnvironment.ConfiguracaoValida(encontrada))
+                        return new PrinterSettings { PrinterName = encontrada };
                 }
             }
-
-            string listaImpressoras = string.Join(Environment.NewLine, nomes);
-
-            MessageBox.Show(
-                "Não encontrei automaticamente a impressora térmica.\n\n" +
-                "Impressoras instaladas no Windows:\n" +
-                listaImpressoras + "\n\n" +
-                "Me mande o nome EXATO da sua impressora térmica que eu ajusto o código com ela.");
+            }
+            catch
+            {
+                // Registra o erro ou ignora, retornando null para indicar falha
+            }
 
             return null;
         }
