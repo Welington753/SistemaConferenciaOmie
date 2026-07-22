@@ -64,6 +64,10 @@ namespace SistemaConferenciaPedidos
             lblResumoFaltam = new Label();
             lblResumoPercentual = new Label();
             pbProgressoResumo = new ProgressBar();
+            chkSomenteFaltantes = new CheckBox();
+            panelDataOperacional = new Panel();
+            lblDataOperacional = new Label();
+            lblUltimoImpresso = new Label();
 
             ((System.ComponentModel.ISupportInitialize)dgvPedidos).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvItensPedido).BeginInit();
@@ -85,6 +89,21 @@ namespace SistemaConferenciaPedidos
             panelTopo.Dock = DockStyle.Fill;
             panelTopo.Controls.Add(lblTitulo);
             panelTopo.Controls.Add(btnAdministracao);
+            panelTopo.Controls.Add(panelDataOperacional);
+            
+            // panelDataOperacional
+            panelDataOperacional.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            panelDataOperacional.Location = new Point(800, 15);
+            panelDataOperacional.Size = new Size(250, 40);
+            panelDataOperacional.BackColor = Color.Orange;
+            panelDataOperacional.Controls.Add(lblDataOperacional);
+            panelDataOperacional.Visible = false; // será gerenciado pelo código
+            
+            // lblDataOperacional
+            lblDataOperacional.Dock = DockStyle.Fill;
+            lblDataOperacional.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
+            lblDataOperacional.TextAlign = ContentAlignment.MiddleCenter;
+            lblDataOperacional.Text = "Data Operacional: 00/00/0000";
 
             // lblTitulo
             lblTitulo.AutoSize = true;
@@ -99,6 +118,7 @@ namespace SistemaConferenciaPedidos
             panelFiltros.Controls.Add(dtpDataInicial);
             panelFiltros.Controls.Add(lblDataFinal);
             panelFiltros.Controls.Add(dtpDataFinal);
+            panelFiltros.Controls.Add(chkSomenteFaltantes);
             panelFiltros.Controls.Add(btnBuscarPedidos);
             panelFiltros.Controls.Add(btnAtualizarPedidos);
             panelFiltros.Controls.Add(btnSalvarPedido);
@@ -122,28 +142,34 @@ namespace SistemaConferenciaPedidos
             dtpDataInicial.ValueChanged += dtpData_ValueChanged;
             dtpDataFinal.ValueChanged += dtpData_ValueChanged;
 
-            btnBuscarPedidos.Location = new Point(460, 25);
-            btnBuscarPedidos.Size = new Size(150, 32);
+            // chkSomenteFaltantes
+            chkSomenteFaltantes.AutoSize = true;
+            chkSomenteFaltantes.Location = new Point(440, 30);
+            chkSomenteFaltantes.Text = "Mostrar somente faltantes";
+            chkSomenteFaltantes.CheckedChanged += chkSomenteFaltantes_CheckedChanged;
+
+            btnBuscarPedidos.Location = new Point(620, 25);
+            btnBuscarPedidos.Size = new Size(110, 32);
             btnBuscarPedidos.Text = "Buscar Pedidos";
             btnBuscarPedidos.UseVisualStyleBackColor = true;
             btnBuscarPedidos.Click += btnBuscarPedidos_Click;
 
-            btnAtualizarPedidos.Location = new Point(630, 25);
-            btnAtualizarPedidos.Size = new Size(150, 32);
+            btnAtualizarPedidos.Location = new Point(740, 25);
+            btnAtualizarPedidos.Size = new Size(110, 32);
             btnAtualizarPedidos.Text = "Atualizar Pedidos";
             btnAtualizarPedidos.UseVisualStyleBackColor = true;
             btnAtualizarPedidos.Click += btnAtualizarPedidos_Click;
 
             btnSalvarPedido.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnSalvarPedido.Location = new Point(800, 25);
-            btnSalvarPedido.Size = new Size(180, 32);
+            btnSalvarPedido.Location = new Point(860, 25);
+            btnSalvarPedido.Size = new Size(160, 32);
             btnSalvarPedido.Text = "Importar Etiquetas do Lote";
             btnSalvarPedido.UseVisualStyleBackColor = true;
             btnSalvarPedido.Click += btnSalvarPedido_Click;
 
             btnValidarVinculos.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnValidarVinculos.Location = new Point(1000, 25);
-            btnValidarVinculos.Size = new Size(180, 32);
+            btnValidarVinculos.Location = new Point(1030, 25);
+            btnValidarVinculos.Size = new Size(150, 32);
             btnValidarVinculos.Text = "Validar Vínculos do Dia";
             btnValidarVinculos.UseVisualStyleBackColor = true;
             btnValidarVinculos.Click += btnValidarVinculos_Click;
@@ -176,6 +202,7 @@ namespace SistemaConferenciaPedidos
             panelResumo.Controls.Add(lblResumoFaltam);
             panelResumo.Controls.Add(lblResumoPercentual);
             panelResumo.Controls.Add(pbProgressoResumo);
+            panelResumo.Controls.Add(lblUltimoImpresso);
 
             lblResumoTotal.AutoSize = true;
             lblResumoTotal.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
@@ -206,6 +233,14 @@ namespace SistemaConferenciaPedidos
             pbProgressoResumo.Minimum = 0;
             pbProgressoResumo.Maximum = 100;
             pbProgressoResumo.Value = 0;
+
+            lblUltimoImpresso.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            lblUltimoImpresso.AutoSize = true;
+            lblUltimoImpresso.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblUltimoImpresso.ForeColor = Color.Blue;
+            lblUltimoImpresso.Location = new Point(740, 5);
+            lblUltimoImpresso.Text = "Último: Nenhum";
+            lblUltimoImpresso.TextAlign = ContentAlignment.MiddleRight;
 
             btnExcluirPedido.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnExcluirPedido.BackColor = Color.MistyRose;
@@ -377,5 +412,9 @@ namespace SistemaConferenciaPedidos
         public System.Windows.Forms.Label lblResumoFaltam;
         public System.Windows.Forms.Label lblResumoPercentual;
         public System.Windows.Forms.ProgressBar pbProgressoResumo;
+        public System.Windows.Forms.CheckBox chkSomenteFaltantes;
+        public System.Windows.Forms.Panel panelDataOperacional;
+        public System.Windows.Forms.Label lblDataOperacional;
+        public System.Windows.Forms.Label lblUltimoImpresso;
     }
 }

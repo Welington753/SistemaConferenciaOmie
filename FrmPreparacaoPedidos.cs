@@ -130,6 +130,32 @@ namespace SistemaConferenciaPedidos
             CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
         }
 
+        private void chkSomenteFaltantes_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_suprimindoEventoData || _carregandoPedidos)
+                return;
+
+            CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
+        }
+
+        private void AtualizarPainelDataOperacional()
+        {
+            if (panelDataOperacional == null || lblDataOperacional == null) return;
+            
+            DateTime dataAtual = dtpDataInicial.Value.Date;
+            lblDataOperacional.Text = $"Data Operacional: {dataAtual:dd/MM/yyyy}";
+            
+            if (dataAtual != DateTime.Today)
+            {
+                panelDataOperacional.BackColor = Color.Orange;
+            }
+            else
+            {
+                panelDataOperacional.BackColor = Color.LightGreen;
+            }
+            panelDataOperacional.Visible = true;
+        }
+
 
 
         private string NormalizarCodigoPedidoShopee(string texto)
@@ -1235,10 +1261,13 @@ namespace SistemaConferenciaPedidos
                             
                             var authService = new SistemaConferenciaPedidos.Services.AdminAuthService();
                             authService.RegistrarAcao("REIMPRESSAO_PEDIDO", pedidoOriginalParaAtualizar.NumeroPedidoCliente, $"Motivo: {motivoReimpressao}");
+                            
+                            lblUltimoImpresso.Text = $"Último: {snapshot.NumeroPedidoCliente} | {snapshot.Marketplace} | {DateTime.Now:HH:mm:ss} [Reimpressão]";
                         }
                         else
                         {
                             pedidoOriginalParaAtualizar.DataPrimeiraImpressao = DateTime.Now;
+                            lblUltimoImpresso.Text = $"Último: {snapshot.NumeroPedidoCliente} | {snapshot.Marketplace} | {DateTime.Now:HH:mm:ss}";
                         }
                         
                         pedidoOriginalParaAtualizar.Impresso = true;
@@ -1356,7 +1385,11 @@ namespace SistemaConferenciaPedidos
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
                 });
 
-                dgvPedidos.DataSource = lista;
+                var listaGrid = chkSomenteFaltantes.Checked 
+                    ? lista.Where(p => !p.Impresso && !p.Oculto && !string.Equals((p.Status ?? "").Trim(), "Cancelado", StringComparison.OrdinalIgnoreCase)).ToList() 
+                    : lista;
+
+                dgvPedidos.DataSource = listaGrid;
 
                 dgvPedidos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvPedidos.MultiSelect = false;
@@ -1369,6 +1402,7 @@ namespace SistemaConferenciaPedidos
                 FormatarLinhasSemEtiqueta();
 
                 AtualizarResumoPreparacao(lista);
+                AtualizarPainelDataOperacional();
 
                 if (!string.IsNullOrWhiteSpace(numeroPedidoParaRestaurar))
                     RestaurarSelecaoPedido(numeroPedidoParaRestaurar);
