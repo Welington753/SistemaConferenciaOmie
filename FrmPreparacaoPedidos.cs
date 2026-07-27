@@ -37,7 +37,8 @@ namespace SistemaConferenciaPedidos
         F2,
         Enter,
         F4,
-        Reimpressao
+        Reimpressao,
+        BuscaPedido
     }
 
     public partial class FrmPreparacaoPedidos : Form
@@ -47,7 +48,11 @@ namespace SistemaConferenciaPedidos
         private string _jsonPedidoSelecionado = "[]";
         private PedidoConferencia _pedidoSelecionado = null;
         private readonly List<EtiquetaMarketplaceLote> _etiquetasLote = new List<EtiquetaMarketplaceLote>();
+        private readonly IPedidoRepository _pedidoRepository = new PedidoRepositorySqlite();
+        private readonly ValidacaoPreImpressaoService _validacaoPreImpressaoService;
         private bool _carregandoPedidos = false;
+        private readonly System.Threading.SemaphoreSlim _operacaoOmieSemaphore = new System.Threading.SemaphoreSlim(1, 1);
+        private static readonly System.Threading.Mutex _omieMutex = new System.Threading.Mutex(false, "Global\\SistemaConferenciaPedidos_Omie_ListarPedidos");
         private bool _suprimindoEventoData = false;
         private readonly Dictionary<string, string> _cachePedidoShopeeOcr = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<EtiquetaShopeePdf> _etiquetasShopeePdf = new List<EtiquetaShopeePdf>();
@@ -59,22 +64,15 @@ namespace SistemaConferenciaPedidos
         private readonly LeituraCodigoService _leituraCodigoService = new LeituraCodigoService();
         private readonly ValidacaoEanService _validacaoEanService = new ValidacaoEanService();
         private readonly VinculacaoEtiquetaService _vinculacaoEtiquetaService = new VinculacaoEtiquetaService();
-        private readonly IPedidoRepository _pedidoRepository = new PedidoRepositorySqlite();
         internal Action<string, string, MessageBoxButtons, MessageBoxIcon> ExibirMensagem = (msg, title, btns, icon) => MessageBox.Show(msg, title, btns, icon);
-        private readonly ValidacaoPreImpressaoService _validacaoPreImpressaoService;
         private readonly PedidoProdutoBuscaService _pedidoProdutoBuscaService = new PedidoProdutoBuscaService();
         private readonly System.Threading.SemaphoreSlim _controleImpressao = new System.Threading.SemaphoreSlim(1, 1);
-        // private string _caminhoPdfShopee = ""; (removido)
-        // private string _ultimoArquivoZipImportado = ""; (removido)
         private System.Windows.Forms.Timer _timerAtualizacaoPedidos;
-        private bool _atualizandoPedidos = false;
         private readonly MercadoLivrePdfService _mercadoLivrePdfService =
     new MercadoLivrePdfService();
 
         private readonly List<EtiquetaMercadoLivrePdf> _etiquetasMercadoLivrePdf =
             new List<EtiquetaMercadoLivrePdf>();
-
-        // private string _caminhoPdfMercadoLivre = ""; (removido)
 
 
         public FrmPreparacaoPedidos()
@@ -99,8 +97,13 @@ namespace SistemaConferenciaPedidos
             dtpDataFinal.Value = DateTime.Today;
             _suprimindoEventoData = false;
 
+            btnLocalizarPedido.Click += btnLocalizarPedido_Click;
+            btnImprimirLocalizado.Click += btnImprimirLocalizado_Click;
+            txtBuscaPedido.KeyDown += txtBuscaPedido_KeyDown;
+
             ConfigurarGrids();
             CarregarPedidos();
+            AtualizarUltimoPedidoImpresso();
 
             ConfigurarAtualizacaoAutomatica();
         }
@@ -802,6 +805,8 @@ namespace SistemaConferenciaPedidos
             var frm = new FrmAdministracao();
             frm.ShowDialog();
             CarregarPedidos();
+            AtualizarUltimoPedidoImpresso();
+            LimparResultadoBuscaPedido();
         }
 
         private void btnSalvarPedido_Click(object sender, EventArgs e)
@@ -910,7 +915,7 @@ namespace SistemaConferenciaPedidos
                     .ToList();
 
                 /*
-                 * Ãndice por Venda.
+                 * Ã ndice por Venda.
                  */
                 var etiquetasPorCodigo = _etiquetasMercadoLivrePdf
                     .Where(e => !string.IsNullOrWhiteSpace(e.CodigoEtiqueta) && SomenteNumeros(e.CodigoEtiqueta).Length == 11)
@@ -929,7 +934,7 @@ namespace SistemaConferenciaPedidos
                             StringComparer.OrdinalIgnoreCase);
 
                 /*
-                 * Ãndice por Pack ID.
+                 * Ã ndice por Pack ID.
                  */
                 var etiquetasPorPackId =
                     _etiquetasMercadoLivrePdf
@@ -959,7 +964,7 @@ namespace SistemaConferenciaPedidos
 
                     bool temCodigoSalvo = codigoAtual.Length == 11;
 
-                    // Se o pedido JÃ TEM cÃ³digo (11 dÃ­gitos), usamos ele para buscar a pÃ¡gina correta no PDF.
+                    // Se o pedido JÃ  TEM cÃ³digo (11 dÃ­gitos), usamos ele para buscar a pÃ¡gina correta no PDF.
                     // Isso evita cruzamento de pÃ¡ginas por erro na extraÃ§Ã£o do NumeroVenda.
                     if (temCodigoSalvo)
                     {
@@ -1147,7 +1152,7 @@ namespace SistemaConferenciaPedidos
                 sb.AppendLine("======================================");
                 sb.AppendLine("ORDEM NO ARQUIVO: " + etiqueta.OrdemNoArquivo);
                 sb.AppendLine("PLATAFORMA: " + etiqueta.PlataformaDetectada);
-                sb.AppendLine("TEXTO EXTRAÃDO DOS ^FD:");
+                sb.AppendLine("TEXTO EXTRAÃ DO DOS ^FD:");
                 sb.AppendLine(_etiquetaService.ExtrairTextosFdDoZpl(etiqueta.ConteudoZpl));
                 sb.AppendLine();
             }
@@ -1236,10 +1241,39 @@ namespace SistemaConferenciaPedidos
                 // 3. ValidaÃ§Ã£o e ImpressÃ£o apenas com snapshot
                 var validacao = _validacaoPreImpressaoService.ValidarAntesDaImpressao(snapshot);
 
-                if (!validacao.Valido)
+                string adminMotivoIncerto = null;
+                if (validacao.Status == StatusValidacaoPreImpressao.Invalido)
                 {
-                    ExibirMensagem($"IMPRESSÃƒO BLOQUEADA!\n\nMotivo: {validacao.MotivoBloqueio}\nDetalhes: {validacao.Mensagem}", "Falha de SeguranÃ§a", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ExibirMensagem($"IMPRESSÃO BLOQUEADA!\n\nMotivo: {validacao.MotivoBloqueio}\nDetalhes: {validacao.Mensagem}", "Falha de Segurança", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
+                }
+                else if (validacao.Status == StatusValidacaoPreImpressao.NaoConfirmado)
+                {
+                    var msg = $"Não foi possível confirmar com segurança que esta etiqueta pertence ao pedido.\n\n" +
+                              $"Pedido: {snapshot.NumeroPedidoCliente}\n" +
+                              $"Marketplace: {snapshot.Marketplace}\n" +
+                              $"Código esperado: {snapshot.CodigoEtiqueta}\n" +
+                              $"Motivo técnico: {validacao.MotivoBloqueio}\n\n" +
+                              $"A impressão somente poderá ser liberada por um administrador.";
+
+                    var resp = MessageBox.Show(msg, "Validação Incerta", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+                    if (resp != DialogResult.OK) return;
+
+                    if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
+                    {
+                        ExibirMensagem("Impressão bloqueada (autorização negada ou cancelada).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    adminMotivoIncerto = FrmMotivoReimpressao.SolicitarMotivo(this);
+                    if (string.IsNullOrWhiteSpace(adminMotivoIncerto))
+                    {
+                        ExibirMensagem("Impressão bloqueada (motivo não informado).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    var confirmar = MessageBox.Show("Confirma a liberação excepcional de impressão?", "Confirmação Final", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                    if (confirmar != DialogResult.Yes) return;
                 }
 
                 var resultadoImpressao = ServicoImpressao.ImprimirPedido(
@@ -1272,6 +1306,13 @@ namespace SistemaConferenciaPedidos
                         
                         pedidoOriginalParaAtualizar.Impresso = true;
                         _pedidoRepository.SalvarOuAtualizar(pedidoOriginalParaAtualizar);
+
+                        if (adminMotivoIncerto != null)
+                        {
+                            var authService = new SistemaConferenciaPedidos.Services.AdminAuthService();
+                            string detalhesAudit = $"PedidoId: {snapshot.Id} | Marketplace: {snapshot.Marketplace} | CodigoEtiqueta: {snapshot.CodigoEtiqueta} | Motivo Técnico: {validacao.MotivoBloqueio} | Origem: {origem} | Motivo Admin: {adminMotivoIncerto} | Hash: {validacao.HashEtiqueta}";
+                            authService.RegistrarAcao("IMPRESSÃO AUTORIZADA MANUALMENTE", snapshot.NumeroPedidoCliente, detalhesAudit);
+                        }
                     }
                     
                     CarregarPedidos(snapshot.NumeroPedidoCliente);
@@ -1307,6 +1348,162 @@ namespace SistemaConferenciaPedidos
             }
             
             await ExecutarImpressaoSeguraAsync(_pedidoSelecionado, OrigemSolicitacaoImpressao.Botao);
+        }
+
+        private void txtBuscaPedido_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                BuscarPedidosPorSufixoNaData(txtBuscaPedido.Text);
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                e.SuppressKeyPress = true;
+                LimparResultadoBuscaPedido();
+                dgvPedidos.Focus();
+            }
+        }
+
+        private void btnLocalizarPedido_Click(object sender, EventArgs e)
+        {
+            BuscarPedidosPorSufixoNaData(txtBuscaPedido.Text);
+        }
+
+        private async void btnImprimirLocalizado_Click(object sender, EventArgs e)
+        {
+            await ImprimirPedidoLocalizadoAsync();
+        }
+
+        private void LimparResultadoBuscaPedido()
+        {
+            txtBuscaPedido.Clear();
+            btnImprimirLocalizado.Enabled = false;
+        }
+
+        private void BuscarPedidosPorSufixoNaData(string sufixo)
+        {
+            sufixo = sufixo?.Trim() ?? "";
+
+            if (string.IsNullOrWhiteSpace(sufixo))
+            {
+                LimparResultadoBuscaPedido();
+                return;
+            }
+            
+            DateTime inicio = dtpDataInicial.Value.Date;
+            DateTime fimExclusivo = dtpDataFinal.Value.Date.AddDays(1);
+
+            if (inicio > dtpDataFinal.Value.Date)
+                fimExclusivo = inicio.AddDays(1);
+
+            var todosDaData = _pedidoRepository.ObterPorPeriodo(inicio, fimExclusivo)
+                .Where(p => !p.Oculto && p.Status != "Cancelado")
+                .ToList();
+
+            var resultados = todosDaData
+                .Where(p => (p.NumeroPedidoCliente ?? "").EndsWith(sufixo, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            ExibirResultadoBuscaPedido(resultados);
+        }
+
+        private void ExibirResultadoBuscaPedido(List<PedidoConferencia> resultados)
+        {
+            if (resultados.Count == 0)
+            {
+                ExibirMensagem("Nenhum pedido encontrado nesta data.", "Busca de Pedido", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                btnImprimirLocalizado.Enabled = false;
+                return;
+            }
+
+            if (resultados.Count == 1)
+            {
+                var pedidoEncontrado = resultados.First();
+                
+                // Procurar na grade atual para focar
+                bool encontradoNaGrade = false;
+                foreach (DataGridViewRow row in dgvPedidos.Rows)
+                {
+                    if (row.DataBoundItem is PedidoConferencia p && p.Id == pedidoEncontrado.Id)
+                    {
+                        dgvPedidos.ClearSelection();
+                        row.Selected = true;
+                        dgvPedidos.FirstDisplayedScrollingRowIndex = row.Index;
+                        _ = SelecionarPedidoAsync(pedidoEncontrado);
+                        encontradoNaGrade = true;
+                        break;
+                    }
+                }
+
+                if (!encontradoNaGrade)
+                {
+                    _ = SelecionarPedidoAsync(pedidoEncontrado);
+                    ExibirMensagem($"O pedido {pedidoEncontrado.NumeroPedidoCliente} foi localizado, mas está oculto pelos filtros visuais atuais (ex: Somente faltantes).", "Busca de Pedido", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
+                btnImprimirLocalizado.Enabled = true;
+            }
+            else
+            {
+                btnImprimirLocalizado.Enabled = false;
+                
+                var sb = new StringBuilder();
+                sb.AppendLine("Foram encontrados múltiplos pedidos com este sufixo. Por favor, especifique mais números ou localize na lista abaixo:\n");
+                
+                foreach (var r in resultados)
+                {
+                    sb.AppendLine($"- {r.NumeroPedidoCliente} | {r.Marketplace} | {r.Status} | Impresso: {(r.Impresso ? "Sim" : "Não")}");
+                }
+                
+                ExibirMensagem(sb.ToString(), "Ambiguidade na Busca", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private async Task ImprimirPedidoLocalizadoAsync()
+        {
+            if (_pedidoSelecionado == null) return;
+            
+            var pedidoFresco = _pedidoRepository.ObterPorId(_pedidoSelecionado.Id);
+            if (pedidoFresco == null) return;
+
+            DateTime inicio = dtpDataInicial.Value.Date;
+            DateTime fimExclusivo = dtpDataFinal.Value.Date.AddDays(1);
+            if (inicio > dtpDataFinal.Value.Date) fimExclusivo = inicio.AddDays(1);
+
+            DateTime dataPed = pedidoFresco.DataPrevisao?.Date ?? pedidoFresco.DataCriacao.Date;
+            if (dataPed < inicio || dataPed >= fimExclusivo)
+            {
+                ExibirMensagem("Este pedido não pertence à data operacional selecionada.", "Impressão Bloqueada", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            await ExecutarImpressaoSeguraAsync(pedidoFresco, OrigemSolicitacaoImpressao.BuscaPedido);
+        }
+
+        private void AtualizarUltimoPedidoImpresso()
+        {
+            DateTime inicio = dtpDataInicial.Value.Date;
+            DateTime fimExclusivo = dtpDataFinal.Value.Date.AddDays(1);
+            if (inicio > dtpDataFinal.Value.Date) fimExclusivo = inicio.AddDays(1);
+
+            var ultimo = _pedidoRepository.ObterPorPeriodo(inicio, fimExclusivo)
+                .Where(p => !p.Oculto && p.Status != "Cancelado" && p.Impresso && p.DataPrimeiraImpressao.HasValue)
+                .OrderByDescending(p => p.DataReimpressao ?? p.DataPrimeiraImpressao)
+                .FirstOrDefault();
+
+            if (ultimo == null)
+            {
+                lblUltimoImpresso.Text = "Último impresso: Nenhum pedido impresso nesta data.";
+            }
+            else
+            {
+                DateTime dataRef = ultimo.DataReimpressao ?? ultimo.DataPrimeiraImpressao.Value;
+                string hora = dataRef.ToString("HH:mm:ss");
+                string sufixo = ultimo.DataReimpressao.HasValue ? " | Reimpressão" : "";
+                
+                lblUltimoImpresso.Text = $"Último impresso: {ultimo.NumeroPedidoCliente} | {ultimo.Marketplace} | {hora}{sufixo}";
+            }
         }
 
         private void CarregarPedidos(string numeroPedidoParaRestaurar = null)
@@ -1688,32 +1885,132 @@ namespace SistemaConferenciaPedidos
                    marketplace == "SHOPEE";
         }
 
+        private enum AcaoBusca { Nenhuma, Mais200, Completa }
+
+        private AcaoBusca MostrarOpcoesLimiteBusca()
+        {
+            AcaoBusca acao = AcaoBusca.Nenhuma;
+            using (var form = new Form())
+            {
+                form.Text = "Limite Atingido";
+                form.Size = new System.Drawing.Size(420, 160);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
+
+                var lbl = new Label() { Text = "ATENÇÃO: o limite de 500 pedidos foi atingido e ainda existem registros da data nas páginas anteriores. A busca pode estar incompleta.", AutoSize = true, Location = new System.Drawing.Point(20, 20), MaximumSize = new System.Drawing.Size(380, 0) };
+                var btnMais200 = new Button() { Text = "Buscar mais 500", Location = new System.Drawing.Point(20, 70), Width = 110 };
+                var btnCompleta = new Button() { Text = "Fazer busca completa", Location = new System.Drawing.Point(140, 70), Width = 130 };
+                var btnCancelar = new Button() { Text = "Cancelar", Location = new System.Drawing.Point(280, 70), Width = 100 };
+
+                btnMais200.Click += (s, e) => { acao = AcaoBusca.Mais200; form.Close(); };
+                btnCompleta.Click += (s, e) => { acao = AcaoBusca.Completa; form.Close(); };
+                btnCancelar.Click += (s, e) => { acao = AcaoBusca.Nenhuma; form.Close(); };
+
+                form.Controls.Add(lbl);
+                form.Controls.Add(btnMais200);
+                form.Controls.Add(btnCompleta);
+                form.Controls.Add(btnCancelar);
+
+                form.ShowDialog(this);
+            }
+            return acao;
+        }
+
         private async void btnBuscarPedidos_Click(object sender, EventArgs e)
         {
-            var confirmacao = MessageBox.Show(
-                "Deseja procurar novamente os pedidos?",
-                "Confirmar nova busca",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2);
+            if (_carregandoPedidos)
+                return;
+
+            DialogResult confirmacao = MessageBox.Show(this, 
+                "Tem certeza que deseja iniciar uma busca manual na Omie?\n\nIsso pode demorar dependendo da quantidade de pedidos.",
+                "Buscar Pedidos", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
             if (confirmacao != DialogResult.Yes)
                 return;
 
-            btnBuscarPedidos.Enabled = false;
+            bool mutexAdquirido = false;
+            try
+            {
+                mutexAdquirido = _omieMutex.WaitOne(0);
+            }
+            catch (System.Threading.AbandonedMutexException)
+            {
+                mutexAdquirido = true;
+            }
+
+            if (!mutexAdquirido)
+            {
+                MessageBox.Show(this, "Já existe outra busca de pedidos em andamento.", "Atenção", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             try
             {
+                if (!await _operacaoOmieSemaphore.WaitAsync(0))
+                    return;
+
+                _timerAtualizacaoPedidos?.Stop();
+
+                btnBuscarPedidos.Enabled = false;
+                btnAtualizarPedidos.Enabled = false;
+                
+                string textoOriginalBotao = btnBuscarPedidos.Text;
+                btnBuscarPedidos.Text = "Buscando...";
+
                 DateTime dataInicial = dtpDataInicial.Value.Date;
                 DateTime dataFinal = dtpDataFinal.Value.Date;
 
                 if (dataInicial > dataFinal)
                 {
-                    MessageBox.Show("A data inicial não pode ser maior que a data final.");
+                    MessageBox.Show(this, "A data inicial não pode ser maior que a data final.");
                     return;
                 }
 
-                var pedidosImportados = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal);
+                Action<string> onProgress = msg => { btnBuscarPedidos.Text = msg; };
+                
+                var modoAtual = ModoBuscaOmie.Rapida;
+                int? paginaInicial = null;
+                var resultadoFinal = new ResultadoBuscaOmie();
+                
+                while (true)
+                {
+                    var resultadoBusca = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal, onProgress, default, modoAtual, paginaInicial);
+                    
+                    resultadoFinal.PedidosValidos.AddRange(resultadoBusca.PedidosValidos);
+                    resultadoFinal.Descartados.AddRange(resultadoBusca.Descartados);
+                    resultadoFinal.PaginasConsultadas += resultadoBusca.PaginasConsultadas;
+                    resultadoFinal.PedidosBrutos += resultadoBusca.PedidosBrutos;
+                    resultadoFinal.UltimaPaginaConsultada = resultadoBusca.UltimaPaginaConsultada;
+                    resultadoFinal.LimiteAtingido = resultadoBusca.LimiteAtingido;
+
+                    if (resultadoFinal.LimiteAtingido)
+                    {
+                        var acao = MostrarOpcoesLimiteBusca();
+                        if (acao == AcaoBusca.Mais200)
+                        {
+                            modoAtual = ModoBuscaOmie.Rapida;
+                            paginaInicial = resultadoFinal.UltimaPaginaConsultada > 1 ? resultadoFinal.UltimaPaginaConsultada - 1 : 1;
+                            continue;
+                        }
+                        else if (acao == AcaoBusca.Completa)
+                        {
+                            var confirmacaoCompleta = MessageBox.Show(this, "A busca completa poderá demorar vários minutos porque consultará todo o histórico da Omie. Deseja continuar?", "Busca Completa", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                            if (confirmacaoCompleta == DialogResult.Yes)
+                            {
+                                modoAtual = ModoBuscaOmie.Completa;
+                                paginaInicial = resultadoFinal.UltimaPaginaConsultada > 1 ? resultadoFinal.UltimaPaginaConsultada - 1 : 1;
+                                continue;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                var pedidosImportados = resultadoFinal.PedidosValidos;
+
+                btnBuscarPedidos.Text = "Processando pedidos...";
 
                 var pedidosMarketplace = pedidosImportados
                     .Where(PedidoEhDeMarketplaceValido)
@@ -1723,37 +2020,130 @@ namespace SistemaConferenciaPedidos
                     .Where(p => !PedidoEhDeMarketplaceValido(p))
                     .ToList();
 
+                btnBuscarPedidos.Text = "Comparando com banco...";
+
+                var bancoAntes = _pedidoRepository.ObterTodos()
+                    .Where(p => (p.DataPrevisao.HasValue && p.DataPrevisao.Value.Date >= dataInicial.Date && p.DataPrevisao.Value.Date <= dataFinal.Date)
+                             || (!p.DataPrevisao.HasValue && p.DataCriacao.Date >= dataInicial.Date && p.DataCriacao.Date <= dataFinal.Date))
+                    .ToList();
+                    
+                int antesTotal = bancoAntes.Count;
+                int antesAmz = bancoAntes.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "AMAZON");
+                int antesMl = bancoAntes.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "MERCADO LIVRE");
+                int antesShp = bancoAntes.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "SHOPEE");
+
+                btnBuscarPedidos.Text = "Salvando...";
+
                 // Sincronização segura através de serviço dedicado
                 var syncService = new SistemaConferenciaPedidos.Services.PedidoSincronizacaoService(_pedidoRepository);
                 await syncService.SincronizarAsync(pedidosMarketplace);
 
                 _pedidoSelecionado = null;
                 _jsonPedidoSelecionado = "[]";
-                txtCliente.Text = "";
-                txtPedidoCliente.Text = "";
-                txtMarketplace.Text = "";
-                txtCodigoEtiqueta.Text = "";
+                txtCliente.Clear();
+                txtPedidoCliente.Clear();
+                txtMarketplace.Clear();
+                txtCodigoEtiqueta.Clear();
                 dgvItensPedido.DataSource = null;
 
+                btnBuscarPedidos.Text = "Atualizando grade...";
                 CarregarPedidos();
+                System.IO.File.AppendAllText(@"c:\temp\diag.txt", "7. grade atualizada\n");
 
-                MessageBox.Show(
-                    $"Busca concluída.\n\n" +
-                    $"Período: {dataInicial:dd/MM/yyyy} até {dataFinal:dd/MM/yyyy}\n\n" +
-                    $"Pedidos para preparação:\n" +
-                    $"Amazon / Shopee / Mercado Livre: {pedidosMarketplace.Count}\n\n" +
-                    $"Pedidos de outros canais ignorados: {pedidosOutrosCanais.Count}",
-                    "Buscar pedidos",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                var bancoDepois = _pedidoRepository.ObterTodos()
+                    .Where(p => (p.DataPrevisao.HasValue && p.DataPrevisao.Value.Date >= dataInicial.Date && p.DataPrevisao.Value.Date <= dataFinal.Date)
+                             || (!p.DataPrevisao.HasValue && p.DataCriacao.Date >= dataInicial.Date && p.DataCriacao.Date <= dataFinal.Date))
+                    .ToList();
+                
+                int depoisAtivos = bancoDepois.Count(p => !p.Oculto && p.Status != "Cancelado");
+                int depoisOcultos = bancoDepois.Count(p => p.Oculto);
+
+                int omieAmazon = pedidosMarketplace.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "AMAZON");
+                int omieMl = pedidosMarketplace.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "MERCADO LIVRE");
+                int omieShopee = pedidosMarketplace.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "SHOPEE");
+                int omieOutros = pedidosOutrosCanais.Count;
+                int descartadosEtapa = resultadoFinal.Descartados.Count(d => d.MotivoExclusao.Contains("Etapa diferente"));
+                int totalValidoOmie = pedidosMarketplace.Count;
+
+                var listaGrid = bancoDepois.Where(p => !p.Oculto && p.Status != "Cancelado" && PedidoEhDeMarketplaceValido(p)).ToList();
+                int gridTotal = listaGrid.Count;
+                int gridAmazon = listaGrid.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "AMAZON");
+                int gridMl = listaGrid.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "MERCADO LIVRE");
+                int gridShopee = listaGrid.Count(p => MarketplaceHelper.NormalizarMarketplace(p.Marketplace) == "SHOPEE");
+                
+                var codigosOmie = new HashSet<string>(pedidosMarketplace.Select(p => p.NumeroPedidoCliente ?? ""));
+                var pedidosAmaisNoBanco = listaGrid.Where(p => !codigosOmie.Contains(p.NumeroPedidoCliente ?? "")).ToList();
+                
+                int inseridosEstimado = (bancoDepois.Count - bancoAntes.Count);
+                int atualizadosEstimado = totalValidoOmie - inseridosEstimado;
+                
+                var diag = new System.Text.StringBuilder();
+                diag.AppendLine("A. OMIE — EXECUÇÃO ATUAL");
+                diag.AppendLine($"- pedidos brutos analisados: {resultadoFinal.PedidosBrutos}");
+                diag.AppendLine($"- pedidos dentro da data: {totalValidoOmie + omieOutros}");
+                diag.AppendLine($"- Amazon: {omieAmazon}");
+                diag.AppendLine($"- Mercado Livre: {omieMl}");
+                diag.AppendLine($"- Shopee: {omieShopee}");
+                diag.AppendLine($"- outros marketplaces: {omieOutros}");
+                diag.AppendLine($"- etapa diferente: {descartadosEtapa}");
+                diag.AppendLine($"- total válido para preparação: {totalValidoOmie}");
+                diag.AppendLine();
+                diag.AppendLine("B. BANCO — ANTES DA BUSCA");
+                diag.AppendLine($"- total já existente na data: {antesTotal}");
+                diag.AppendLine($"- Amazon: {antesAmz}, Mercado Livre: {antesMl}, Shopee: {antesShp}");
+                diag.AppendLine();
+                diag.AppendLine("C. BANCO — APÓS A BUSCA");
+                diag.AppendLine($"- inseridos: {(inseridosEstimado > 0 ? inseridosEstimado : 0)}");
+                diag.AppendLine($"- atualizados/já existentes: {(atualizadosEstimado > 0 ? atualizadosEstimado : 0)}");
+                diag.AppendLine($"- ocultos: {depoisOcultos}");
+                diag.AppendLine($"- rejeitados: {resultadoFinal.Descartados.Count}");
+                diag.AppendLine($"- total final: {bancoDepois.Count}");
+                diag.AppendLine();
+                diag.AppendLine("D. GRADE");
+                diag.AppendLine($"- total visível: {gridTotal}");
+                diag.AppendLine($"- Amazon: {gridAmazon}");
+                diag.AppendLine($"- Mercado Livre: {gridMl}");
+                diag.AppendLine($"- Shopee: {gridShopee}");
+
+                bool divergencia = (totalValidoOmie != depoisAtivos) || (depoisAtivos != gridTotal) || resultadoFinal.LimiteAtingido || pedidosAmaisNoBanco.Any();
+
+                if (pedidosAmaisNoBanco.Any())
+                {
+                    diag.AppendLine();
+                    diag.AppendLine("REGISTROS EXCEDENTES NO BANCO (NÃO RETORNADOS NESTA BUSCA OMIE):");
+                    foreach (var p in pedidosAmaisNoBanco)
+                    {
+                        diag.AppendLine($"- Pedido: {p.NumeroPedidoCliente} ({p.Marketplace})");
+                    }
+                }
+
+                diag.AppendLine();
+                if (divergencia)
+                    diag.AppendLine("Foi encontrada divergência entre a busca atual, o banco e a grade.");
+                else
+                    diag.AppendLine("Nenhuma divergência foi encontrada.");
+                    
+                string situacao = resultadoFinal.LimiteAtingido ? "ATENÇÃO: o limite de 500 pedidos foi atingido e ainda existem registros da data nas páginas anteriores. A busca pode estar incompleta." : "Busca suficiente";
+                diag.AppendLine($"\nSituação: {situacao}");
+                
+                MessageBox.Show(this, diag.ToString(), "Diagnóstico de Integração", MessageBoxButtons.OK, divergencia ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Erro ao buscar pedidos: " + ex.Message);
+                MessageBox.Show(this, "Erro ao buscar pedidos: " + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
+                _timerAtualizacaoPedidos?.Start();
+                if (_operacaoOmieSemaphore.CurrentCount == 0)
+                    _operacaoOmieSemaphore.Release();
+                    
+                if (mutexAdquirido)
+                    _omieMutex.ReleaseMutex();
+                    
+                btnBuscarPedidos.Text = "Buscar Pedidos";
                 btnBuscarPedidos.Enabled = true;
+                btnAtualizarPedidos.Enabled = true;
             }
         }
 
@@ -1841,30 +2231,63 @@ namespace SistemaConferenciaPedidos
 
         private async Task AtualizarPedidosDoOmieAsync(bool exibirMensagem)
         {
-            if (_atualizandoPedidos)
+            bool mutexAdquirido = false;
+            try
+            {
+                mutexAdquirido = _omieMutex.WaitOne(0);
+            }
+            catch (System.Threading.AbandonedMutexException)
+            {
+                mutexAdquirido = true;
+            }
+
+            if (!mutexAdquirido)
+            {
+                if (exibirMensagem)
+                    MessageBox.Show(this, "Já existe outra busca de pedidos em andamento.", "Atenção", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
+            }
+
+            if (!await _operacaoOmieSemaphore.WaitAsync(0))
+                return;
+
+            string textoBotaoAtualizar = btnAtualizarPedidos.Text;
+
+            if (exibirMensagem)
+            {
+                btnAtualizarPedidos.Enabled = false;
+                btnBuscarPedidos.Enabled = false;
+                btnAtualizarPedidos.Text = "Atualizando...";
+            }
 
             try
             {
-                _atualizandoPedidos = true;
+                DateTime dataInicial = DateTime.Now.Date.AddDays(-3);
+                DateTime dataFinal = DateTime.Now.Date;
+
+                Action<string> onProgress = msg => 
+                { 
+                    if (exibirMensagem) btnAtualizarPedidos.Text = msg; 
+                };
+
+                // Auto-refresh uses only Rapida
+                var resultadoFinal = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal, onProgress, default, ModoBuscaOmie.Rapida, null);
+                var pedidosImportados = resultadoFinal.PedidosValidos;
 
                 if (exibirMensagem)
-                    btnAtualizarPedidos.Enabled = false;
+                    btnAtualizarPedidos.Text = "Processando pedidos...";
 
-                var dataInicial = dtpDataInicial.Value.Date;
-                var dataFinal = dtpDataFinal.Value.Date;
-
-                var pedidosOmie = await _pedidoOmieService.BuscarPedidosAsync(dataInicial, dataFinal);
-
-                var pedidosMarketplace = pedidosOmie
+                var pedidosMarketplace = pedidosImportados
                     .Where(PedidoEhDeMarketplaceValido)
                     .ToList();
 
-                var pedidosIgnorados = pedidosOmie
+                var pedidosIgnorados = pedidosImportados
                     .Where(p => !PedidoEhDeMarketplaceValido(p))
                     .ToList();
 
-                // Sincronização segura através de serviço dedicado (idempotente e imune a corrida)
+                if (exibirMensagem)
+                    btnAtualizarPedidos.Text = "Salvando...";
+
                 var syncService = new SistemaConferenciaPedidos.Services.PedidoSincronizacaoService(_pedidoRepository);
                 await syncService.SincronizarAsync(pedidosMarketplace);
 
@@ -1872,7 +2295,7 @@ namespace SistemaConferenciaPedidos
 
                 if (exibirMensagem)
                 {
-                    MessageBox.Show(
+                    MessageBox.Show(this, 
                         $"Atualização concluída!\n\n" +
                         $"Pedidos de marketplace processados: {pedidosMarketplace.Count}\n" +
                         $"Ignorados por não serem Amazon/Shopee/Mercado Livre: {pedidosIgnorados.Count}",
@@ -1884,14 +2307,22 @@ namespace SistemaConferenciaPedidos
             catch (Exception ex)
             {
                 if (exibirMensagem)
-                    MessageBox.Show("Erro ao atualizar pedidos:\n" + ex.Message);
+                    MessageBox.Show(this, "Erro ao atualizar pedidos:\n" + ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                _atualizandoPedidos = false;
+                if (_operacaoOmieSemaphore.CurrentCount == 0)
+                    _operacaoOmieSemaphore.Release();
+
+                if (mutexAdquirido)
+                    _omieMutex.ReleaseMutex();
 
                 if (exibirMensagem)
+                {
+                    btnAtualizarPedidos.Text = "Atualizar (F5)";
                     btnAtualizarPedidos.Enabled = true;
+                    btnBuscarPedidos.Enabled = true;
+                }
             }
         }
         private void btnImprimirPorProduto_Click(object sender, EventArgs e)

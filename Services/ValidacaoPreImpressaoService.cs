@@ -42,7 +42,7 @@ namespace SistemaConferenciaPedidos.Services
             string etiqueta = snapshotPedido.EtiquetaMarketplaceZpl;
             
             if (string.IsNullOrWhiteSpace(etiqueta))
-                return ResultadoValidacaoPreImpressao.Falha("Sem conteúdo ZPL ou PDF associado.", "Sem Etiqueta");
+                return ResultadoValidacaoPreImpressao.Falha("Sem conteúdo ZPL ou PDF associado.", "Sem Etiqueta", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
             string hash = CalcularHash(etiqueta);
 
@@ -55,18 +55,18 @@ namespace SistemaConferenciaPedidos.Services
 
                 var partes = etiqueta.Split('|');
                 if (partes.Length < 3)
-                    return ResultadoValidacaoPreImpressao.Falha("Referência de página PDF corrompida.", "Referência Quebrada");
+                    return ResultadoValidacaoPreImpressao.Falha("Referência de página PDF corrompida.", "Referência Quebrada", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 string nomePdfZpl = partes[1];
                 if (!int.TryParse(partes[2], out int paginaAlvo))
-                    return ResultadoValidacaoPreImpressao.Falha("Número da página PDF inválido.", "Referência Quebrada");
+                    return ResultadoValidacaoPreImpressao.Falha("Número da página PDF inválido.", "Referência Quebrada", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 string zipShopee = snapshotPedido.CaminhoZipImportacao;
                 if (string.IsNullOrWhiteSpace(zipShopee))
                     zipShopee = caminhoZipShopee; // fallback legado
 
                 if (string.IsNullOrWhiteSpace(zipShopee) || !File.Exists(zipShopee))
-                    return ResultadoValidacaoPreImpressao.Falha("O arquivo ZIP original não foi encontrado para validar o PDF. Reimporte o arquivo desta etiqueta.", "Arquivo ZIP Ausente");
+                    return ResultadoValidacaoPreImpressao.Falha("O arquivo ZIP original não foi encontrado para validar o PDF. Reimporte o arquivo desta etiqueta.", "Arquivo ZIP Ausente", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 string textoPagina = "";
                 try
@@ -109,7 +109,7 @@ namespace SistemaConferenciaPedidos.Services
 
                     string rastreioNormalizado = TextoHelper.SomenteLetrasENumeros(snapshotPedido.CodigoEtiqueta ?? "");
                     if (string.IsNullOrWhiteSpace(rastreioNormalizado))
-                        return ResultadoValidacaoPreImpressao.Falha("Pedido não possui código de etiqueta.", "Código Ausente");
+                        return ResultadoValidacaoPreImpressao.Falha("Pedido não possui código de etiqueta.", "Código Ausente", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                     int paginaCerta = -1;
                     string textoCerto = "";
@@ -175,7 +175,7 @@ namespace SistemaConferenciaPedidos.Services
                     }
 
                     if (paginaCerta == -1)
-                        return ResultadoValidacaoPreImpressao.Falha("Código não encontrado no ZIP importado", "Código PDF Inválido");
+                        return ResultadoValidacaoPreImpressao.Falha("Código não encontrado no ZIP importado", "Código PDF Inválido", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                     if (paginaCerta != paginaAlvo)
                     {
@@ -190,7 +190,7 @@ namespace SistemaConferenciaPedidos.Services
                 }
                 catch (Exception ex)
                 {
-                    return ResultadoValidacaoPreImpressao.Falha($"Erro ao extrair PDF da Shopee: {ex.Message}", "Erro de Extração PDF");
+                    return ResultadoValidacaoPreImpressao.Falha($"Erro ao extrair PDF da Shopee: {ex.Message}", "Erro de Extração PDF", "", StatusValidacaoPreImpressao.NaoConfirmado);
                 }
 
                 hash = CalcularHash(textoPagina);
@@ -202,11 +202,11 @@ namespace SistemaConferenciaPedidos.Services
                 // A prova de vínculo é: CodigoEtiqueta do pedido == código extraído da página.
                 var partes = etiqueta.Split('|');
                 if (partes.Length < 2 || !int.TryParse(partes[1], out int paginaAlvo))
-                    return ResultadoValidacaoPreImpressao.Falha("Referência de página PDF corrompida.", "Referência Quebrada");
+                    return ResultadoValidacaoPreImpressao.Falha("Referência de página PDF corrompida.", "Referência Quebrada", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 string pdfCaminho = snapshotPedido.CaminhoZipImportacao;
                 if (string.IsNullOrWhiteSpace(pdfCaminho) || !File.Exists(pdfCaminho))
-                    return ResultadoValidacaoPreImpressao.Falha("O arquivo PDF original não foi encontrado para validar. Reimporte o arquivo desta etiqueta.", "Arquivo PDF Ausente");
+                    return ResultadoValidacaoPreImpressao.Falha("O arquivo PDF original não foi encontrado para validar. Reimporte o arquivo desta etiqueta.", "Arquivo PDF Ausente", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 string textoPagina = "";
                 try
@@ -220,11 +220,11 @@ namespace SistemaConferenciaPedidos.Services
                 }
                 catch (Exception ex)
                 {
-                    return ResultadoValidacaoPreImpressao.Falha($"Erro ao extrair PDF do Mercado Livre: {ex.Message}", "Erro de Extração PDF");
+                    return ResultadoValidacaoPreImpressao.Falha($"Erro ao extrair PDF do Mercado Livre: {ex.Message}", "Erro de Extração PDF", "", StatusValidacaoPreImpressao.NaoConfirmado);
                 }
 
                 if (string.IsNullOrWhiteSpace(textoPagina))
-                    return ResultadoValidacaoPreImpressao.Falha("Não foi possível extrair o texto da página do Mercado Livre. Conteúdo não validável.", "PDF Sem Texto");
+                    return ResultadoValidacaoPreImpressao.Falha("Não foi possível extrair o texto da página do Mercado Livre. Conteúdo não validável.", "PDF Sem Texto", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 hash = CalcularHash(textoPagina);
 
@@ -238,12 +238,12 @@ namespace SistemaConferenciaPedidos.Services
                 if (string.IsNullOrWhiteSpace(codigoExtraido))
                     return ResultadoValidacaoPreImpressao.Falha(
                         "Código de rastreio não encontrado na página do PDF. Conteúdo do PDF não validável.",
-                        "Código PDF Inválido");
+                        "Código PDF Inválido", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 if (string.IsNullOrWhiteSpace(codigoPedido))
                     return ResultadoValidacaoPreImpressao.Falha(
                         "O pedido não possui CodigoEtiqueta para validação.",
-                        "Código Pedido Vazio");
+                        "Código Pedido Vazio", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 if (codigoExtraido != codigoPedido)
                     return ResultadoValidacaoPreImpressao.Falha(
@@ -321,7 +321,7 @@ namespace SistemaConferenciaPedidos.Services
                 }
 
                 if (!numeroLocalizado)
-                    return ResultadoValidacaoPreImpressao.Falha("Número do pedido não consta no ZPL.", "Número ZPL Inválido");
+                    return ResultadoValidacaoPreImpressao.Falha("Número do pedido não consta no ZPL.", "Número ZPL Inválido", "", StatusValidacaoPreImpressao.NaoConfirmado);
 
                 if (!rastreioLocalizado)
                 {

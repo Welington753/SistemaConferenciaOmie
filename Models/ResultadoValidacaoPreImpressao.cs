@@ -2,9 +2,17 @@ using System;
 
 namespace SistemaConferenciaPedidos.Models
 {
+    public enum StatusValidacaoPreImpressao
+    {
+        Confirmado,
+        NaoConfirmado,
+        Invalido
+    }
+
     public class ResultadoValidacaoPreImpressao
     {
-        public bool Valido { get; set; }
+        public bool Valido => Status == StatusValidacaoPreImpressao.Confirmado;
+        public StatusValidacaoPreImpressao Status { get; set; }
         public string Mensagem { get; set; }
         public string MotivoBloqueio { get; set; }
         public string PedidoId { get; set; }
@@ -21,7 +29,7 @@ namespace SistemaConferenciaPedidos.Models
         {
             return new ResultadoValidacaoPreImpressao
             {
-                Valido = true,
+                Status = StatusValidacaoPreImpressao.Confirmado,
                 Mensagem = "Validação Aprovada",
                 PedidoId = pedidoId,
                 NumeroPedido = numeroPedido,
@@ -40,11 +48,11 @@ namespace SistemaConferenciaPedidos.Models
             return res;
         }
 
-        public static ResultadoValidacaoPreImpressao Falha(string motivo, string mensagem = "Validação Falhou", string pedidoId = "")
+        public static ResultadoValidacaoPreImpressao Falha(string motivo, string mensagem = "Validação Falhou", string pedidoId = "", StatusValidacaoPreImpressao status = StatusValidacaoPreImpressao.Invalido)
         {
             return new ResultadoValidacaoPreImpressao
             {
-                Valido = false,
+                Status = status,
                 MotivoBloqueio = motivo,
                 Mensagem = mensagem,
                 PedidoId = pedidoId

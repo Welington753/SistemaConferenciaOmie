@@ -7,9 +7,15 @@ namespace SistemaConferenciaPedidos
         private TableLayoutPanel layoutPrincipal;
         private Panel panelTopo;
         private Panel panelFiltros;
+        private FlowLayoutPanel panelBotoesAcao;
         private Panel panelPedidos;
         private Panel panelDetalhes;
         private Panel panelItens;
+        private FlowLayoutPanel panelBuscaRapida;
+        private Label lblBuscaPedido;
+        private TextBox txtBuscaPedido;
+        private Button btnLocalizarPedido;
+        private Button btnImprimirLocalizado;
 
         protected override void Dispose(bool disposing)
         {
@@ -26,9 +32,15 @@ namespace SistemaConferenciaPedidos
             layoutPrincipal = new TableLayoutPanel();
             panelTopo = new Panel();
             panelFiltros = new Panel();
+            panelBotoesAcao = new FlowLayoutPanel();
             panelPedidos = new Panel();
             panelDetalhes = new Panel();
             panelItens = new Panel();
+            panelBuscaRapida = new FlowLayoutPanel();
+            lblBuscaPedido = new Label();
+            txtBuscaPedido = new TextBox();
+            btnLocalizarPedido = new Button();
+            btnImprimirLocalizado = new Button();
 
             lblTitulo = new Label();
             lblAtalhos = new Label();
@@ -119,10 +131,20 @@ namespace SistemaConferenciaPedidos
             panelFiltros.Controls.Add(lblDataFinal);
             panelFiltros.Controls.Add(dtpDataFinal);
             panelFiltros.Controls.Add(chkSomenteFaltantes);
-            panelFiltros.Controls.Add(btnBuscarPedidos);
-            panelFiltros.Controls.Add(btnAtualizarPedidos);
-            panelFiltros.Controls.Add(btnSalvarPedido);
-            panelFiltros.Controls.Add(btnValidarVinculos);
+            
+            panelBotoesAcao.FlowDirection = FlowDirection.LeftToRight;
+            panelBotoesAcao.WrapContents = true;
+            panelBotoesAcao.Location = new Point(620, 20);
+            panelBotoesAcao.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            panelBotoesAcao.Height = 80;
+            panelBotoesAcao.Width = 600;
+            
+            panelBotoesAcao.Controls.Add(btnBuscarPedidos);
+            panelBotoesAcao.Controls.Add(btnAtualizarPedidos);
+            panelBotoesAcao.Controls.Add(btnSalvarPedido);
+            panelBotoesAcao.Controls.Add(btnValidarVinculos);
+            
+            panelFiltros.Controls.Add(panelBotoesAcao);
 
             lblDataInicial.AutoSize = true;
             lblDataInicial.Location = new Point(20, 5);
@@ -148,27 +170,25 @@ namespace SistemaConferenciaPedidos
             chkSomenteFaltantes.Text = "Mostrar somente faltantes";
             chkSomenteFaltantes.CheckedChanged += chkSomenteFaltantes_CheckedChanged;
 
-            btnBuscarPedidos.Location = new Point(620, 25);
+            btnBuscarPedidos.Margin = new Padding(3, 5, 3, 3);
             btnBuscarPedidos.Size = new Size(110, 32);
             btnBuscarPedidos.Text = "Buscar Pedidos";
             btnBuscarPedidos.UseVisualStyleBackColor = true;
             btnBuscarPedidos.Click += btnBuscarPedidos_Click;
 
-            btnAtualizarPedidos.Location = new Point(740, 25);
+            btnAtualizarPedidos.Margin = new Padding(3, 5, 3, 3);
             btnAtualizarPedidos.Size = new Size(110, 32);
             btnAtualizarPedidos.Text = "Atualizar Pedidos";
             btnAtualizarPedidos.UseVisualStyleBackColor = true;
             btnAtualizarPedidos.Click += btnAtualizarPedidos_Click;
 
-            btnSalvarPedido.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnSalvarPedido.Location = new Point(860, 25);
+            btnSalvarPedido.Margin = new Padding(3, 5, 3, 3);
             btnSalvarPedido.Size = new Size(160, 32);
             btnSalvarPedido.Text = "Importar Etiquetas do Lote";
             btnSalvarPedido.UseVisualStyleBackColor = true;
             btnSalvarPedido.Click += btnSalvarPedido_Click;
 
-            btnValidarVinculos.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            btnValidarVinculos.Location = new Point(1030, 25);
+            btnValidarVinculos.Margin = new Padding(3, 5, 3, 3);
             btnValidarVinculos.Size = new Size(150, 32);
             btnValidarVinculos.Text = "Validar Vínculos do Dia";
             btnValidarVinculos.UseVisualStyleBackColor = true;
@@ -185,6 +205,7 @@ namespace SistemaConferenciaPedidos
             panelPedidos.Dock = DockStyle.Fill;
             panelPedidos.Padding = new Padding(20, 0, 20, 5);
             panelPedidos.Controls.Add(dgvPedidos);
+            panelPedidos.Controls.Add(panelBuscaRapida);
             panelPedidos.Controls.Add(panelResumo);
             panelPedidos.Controls.Add(lblPedidos);
             panelPedidos.Controls.Add(btnExcluirPedido);
@@ -202,7 +223,36 @@ namespace SistemaConferenciaPedidos
             panelResumo.Controls.Add(lblResumoFaltam);
             panelResumo.Controls.Add(lblResumoPercentual);
             panelResumo.Controls.Add(pbProgressoResumo);
-            panelResumo.Controls.Add(lblUltimoImpresso);
+            
+            // panelBuscaRapida
+            panelBuscaRapida.Dock = DockStyle.Top;
+            panelBuscaRapida.AutoSize = true;
+            panelBuscaRapida.FlowDirection = FlowDirection.LeftToRight;
+            panelBuscaRapida.WrapContents = true;
+            panelBuscaRapida.Padding = new Padding(0, 5, 0, 5);
+            panelBuscaRapida.Controls.Add(lblBuscaPedido);
+            panelBuscaRapida.Controls.Add(txtBuscaPedido);
+            panelBuscaRapida.Controls.Add(btnLocalizarPedido);
+            panelBuscaRapida.Controls.Add(btnImprimirLocalizado);
+            panelBuscaRapida.Controls.Add(lblUltimoImpresso);
+
+            lblBuscaPedido.AutoSize = true;
+            lblBuscaPedido.Margin = new Padding(0, 8, 3, 3);
+            lblBuscaPedido.Text = "Buscar pedido do dia:";
+
+            txtBuscaPedido.Margin = new Padding(3, 5, 3, 3);
+            txtBuscaPedido.Size = new Size(200, 23);
+
+            btnLocalizarPedido.Margin = new Padding(3, 4, 3, 3);
+            btnLocalizarPedido.Size = new Size(80, 25);
+            btnLocalizarPedido.Text = "Localizar";
+            btnLocalizarPedido.UseVisualStyleBackColor = true;
+
+            btnImprimirLocalizado.Margin = new Padding(3, 4, 3, 3);
+            btnImprimirLocalizado.Size = new Size(80, 25);
+            btnImprimirLocalizado.Text = "Imprimir";
+            btnImprimirLocalizado.UseVisualStyleBackColor = true;
+            btnImprimirLocalizado.Enabled = false;
 
             lblResumoTotal.AutoSize = true;
             lblResumoTotal.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
@@ -234,13 +284,13 @@ namespace SistemaConferenciaPedidos
             pbProgressoResumo.Maximum = 100;
             pbProgressoResumo.Value = 0;
 
-            lblUltimoImpresso.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            lblUltimoImpresso.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             lblUltimoImpresso.AutoSize = true;
             lblUltimoImpresso.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             lblUltimoImpresso.ForeColor = Color.Blue;
-            lblUltimoImpresso.Location = new Point(740, 5);
-            lblUltimoImpresso.Text = "Último: Nenhum";
-            lblUltimoImpresso.TextAlign = ContentAlignment.MiddleRight;
+            lblUltimoImpresso.Margin = new Padding(20, 8, 3, 3);
+            lblUltimoImpresso.Text = "Último impresso: Nenhum pedido impresso nesta data.";
+            lblUltimoImpresso.TextAlign = ContentAlignment.MiddleLeft;
 
             btnExcluirPedido.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnExcluirPedido.BackColor = Color.MistyRose;

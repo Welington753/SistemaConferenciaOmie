@@ -9,32 +9,34 @@ namespace SistemaConferenciaPedidos.Services
     public class PedidoOmieService
     {
         private readonly OmieService _omieService;
+        internal Func<int, Task<string>> _omieServiceListarPedidosOverride;
 
         public PedidoOmieService()
         {
-            var config = new Repositories.ConfiguracaoRepositorySqlite();
-            
-            string appKey = config.ObterValor("OmieAppKey", "3967066699596");
-            string appSecret = config.ObterValor("OmieAppSecret", "85e0d23541afa63e481e20c67e7a289d");
+        }
 
-            if (config.ObterValor("OmieAppKey") == "")
+        public async Task<ResultadoBuscaOmie> BuscarPedidosAsync(DateTime dataInicial, DateTime dataFinal, Action<string> onProgress = null, System.Threading.CancellationToken cancellationToken = default, ModoBuscaOmie modoBusca = ModoBuscaOmie.Rapida, int? paginaInicial = null)
+        {
+            var config = new Repositories.ConfiguracaoRepositorySqlite();
+            string appKey = config.ObterValor("OmieAppKey", "")?.Trim();
+            string appSecret = config.ObterValor("OmieAppSecret", "")?.Trim();
+
+            if (string.IsNullOrWhiteSpace(appKey) || string.IsNullOrWhiteSpace(appSecret) ||
+                appKey == "[REMOVIDO]" || appKey == "[REMOVIDO_PARA_AUDITORIA]" || appKey == "********" ||
+                appSecret == "[REMOVIDO]" || appSecret == "[REMOVIDO_PARA_AUDITORIA]" || appSecret == "********")
             {
-                config.SalvarValor("OmieAppKey", appKey);
-                config.SalvarValor("OmieAppSecret", appSecret);
+                throw new Exception("A integração Omie não está configurada. Informe a App Key e o App Secret na Administração.");
             }
 
-            _omieService = new OmieService(
+            var omieServiceLocal = new OmieService(
                 appKey,
                 appSecret,
                 "https://app.omie.com.br/api/v1/produtos/pedido/");
-        }
 
-        public async Task<List<PedidoConferencia>> BuscarPedidosAsync(DateTime dataInicial, DateTime dataFinal)
-        {
-            var pedidosImportados = new List<PedidoConferencia>();
+            var resultado = new ResultadoBuscaOmie();
 
-            string primeiraResposta = await _omieService.ListarPedidosAsync(1);
-            using var primeiroJson = JsonDocument.Parse(primeiraResposta);
+            string json = await FetchPageWithRetryAsync(paginaInicial ?? 1, 0, 0, onProgress, cancellationToken, omieServiceLocal);
+            using var primeiroJson = JsonDocument.Parse(json);
             var primeiroRoot = primeiroJson.RootElement;
 
             if (primeiroRoot.TryGetProperty("faultstring", out var faultInicial))
@@ -45,12 +47,21 @@ namespace SistemaConferenciaPedidos.Services
 
             int totalPaginas = totalPaginasNode.GetInt32();
 
-            for (int pagina = totalPaginas; pagina >= 1; pagina--)
-            {
-                string resposta = await _omieService.ListarPedidosAsync(pagina);
+            int paginaAtual = paginaInicial ?? totalPaginas;
+            bool possuiPedidosAnterioresAData = false;
 
-                using var json = JsonDocument.Parse(resposta);
-                var root = json.RootElement;
+            for (int pagina = paginaAtual; pagina >= 1; pagina--)
+            {
+                if (modoBusca == ModoBuscaOmie.Rapida && (resultado.PaginasConsultadas >= 5 || resultado.PedidosBrutos >= 500))
+                    break;
+
+                resultado.UltimaPaginaConsultada = pagina;
+                resultado.PaginasConsultadas++;
+
+                string resposta = await FetchPageWithRetryAsync(pagina, totalPaginas, resultado.PedidosBrutos, onProgress, cancellationToken, omieServiceLocal);
+
+                using var jsonDoc = JsonDocument.Parse(resposta);
+                var root = jsonDoc.RootElement;
 
                 if (root.TryGetProperty("faultstring", out var faultNode))
                     throw new Exception($"Erro da Omie na página {pagina}: {faultNode.GetString()}");
@@ -58,52 +69,24 @@ namespace SistemaConferenciaPedidos.Services
                 if (!root.TryGetProperty("pedido_venda_produto", out var pedidosNode))
                     continue;
 
-                bool encontrouPedidoNoPeriodo = false;
-                bool paginaSoComDatasAntigas = true;
-
                 foreach (var pedidoNode in pedidosNode.EnumerateArray())
                 {
+                    resultado.PedidosBrutos++;
+
                     if (!pedidoNode.TryGetProperty("cabecalho", out var cabecalhoNode))
-                        continue;
-
-                    string dataPrevisao = "";
-                    if (cabecalhoNode.TryGetProperty("data_previsao", out var dataPrevisaoNode))
-                        dataPrevisao = LerValorComoTexto(dataPrevisaoNode);
-
-                    DateTime? dataPedido = null;
-                    if (DateTime.TryParse(dataPrevisao, out DateTime dataConvertida))
-                        dataPedido = dataConvertida.Date;
-
-                    if (dataPedido.HasValue)
-                    {
-                        if (dataPedido.Value >= dataInicial && dataPedido.Value <= dataFinal)
-                        {
-                            encontrouPedidoNoPeriodo = true;
-                            paginaSoComDatasAntigas = false;
-                        }
-                        else if (dataPedido.Value > dataFinal)
-                        {
-                            paginaSoComDatasAntigas = false;
-                        }
-                    }
-
-                    if (!cabecalhoNode.TryGetProperty("etapa", out var etapaNode))
-                        continue;
-
-                    int etapa = LerInteiro(etapaNode);
-                    if (etapa != 60)
-                        continue;
-
-                    if (!dataPedido.HasValue || dataPedido.Value < dataInicial || dataPedido.Value > dataFinal)
                         continue;
 
                     string numeroPedido = "";
                     string numeroPedidoCliente = "";
                     string nomeCliente = "";
                     string marketplace = "";
-
+                    string etapaStr = "";
+                    
                     if (cabecalhoNode.TryGetProperty("numero_pedido", out var numeroPedidoNode))
                         numeroPedido = LerValorComoTexto(numeroPedidoNode);
+
+                    if (cabecalhoNode.TryGetProperty("etapa", out var etapaStrNode))
+                        etapaStr = LerValorComoTexto(etapaStrNode);
 
                     if (cabecalhoNode.TryGetProperty("origem_pedido", out var origemNode))
                         marketplace = TraduzMarketplace(LerValorComoTexto(origemNode));
@@ -117,10 +100,64 @@ namespace SistemaConferenciaPedidos.Services
                             nomeCliente = LerValorComoTexto(contatoNode);
                     }
 
+                    string codigoPedidoClienteEfetivo = string.IsNullOrWhiteSpace(numeroPedidoCliente) ? numeroPedido : numeroPedidoCliente;
+
+                    string dataPrevisao = "";
+                    if (cabecalhoNode.TryGetProperty("data_previsao", out var dataPrevisaoNode))
+                        dataPrevisao = LerValorComoTexto(dataPrevisaoNode);
+
+                    DateTime? dataPedido = null;
+                    if (DateTime.TryParse(dataPrevisao, out DateTime dataConvertida))
+                        dataPedido = dataConvertida.Date;
+                        
+                    string motivoExclusao = "";
+                    bool valido = true;
+
+                    int etapa = LerInteiro(etapaStrNode);
+
+                    if (etapa != 60)
+                    {
+                        motivoExclusao = $"Etapa diferente da esperada (Esperado: 60, Atual: {etapaStr})";
+                        valido = false;
+                    }
+                    else if (!dataPedido.HasValue)
+                    {
+                        motivoExclusao = $"DataPrevisao nula ou inválida ({dataPrevisao})";
+                        valido = false;
+                    }
+                    else if (dataPedido.Value < dataInicial)
+                    {
+                        possuiPedidosAnterioresAData = true;
+                        motivoExclusao = $"Data fora do período (Previsão: {dataPedido.Value:dd/MM/yyyy}, Período: {dataInicial:dd/MM/yyyy} - {dataFinal:dd/MM/yyyy})";
+                        valido = false;
+                    }
+                    else if (dataPedido.Value > dataFinal)
+                    {
+                        motivoExclusao = $"Data fora do período (Previsão: {dataPedido.Value:dd/MM/yyyy}, Período: {dataInicial:dd/MM/yyyy} - {dataFinal:dd/MM/yyyy})";
+                        valido = false;
+                    }
+
+                    if (!valido)
+                    {
+                        resultado.Descartados.Add(new PedidoDescartadoOmie
+                        {
+                            NumeroPedidoCliente = codigoPedidoClienteEfetivo,
+                            CodigoPedidoOmie = numeroPedido,
+                            DataPrevisao = dataPrevisao,
+                            Etapa = etapaStr,
+                            Status = "Descartado",
+                            Origem = LerValorComoTexto(origemNode),
+                            MarketplaceDetectado = marketplace,
+                            MotivoExclusao = motivoExclusao,
+                            PaginaDescartado = pagina
+                        });
+                        continue;
+                    }
+
                     var pedido = new PedidoConferencia
                     {
                         CodigoEtiqueta = "",
-                        NumeroPedidoCliente = string.IsNullOrWhiteSpace(numeroPedidoCliente) ? numeroPedido : numeroPedidoCliente,
+                        NumeroPedidoCliente = codigoPedidoClienteEfetivo,
                         NomeCliente = nomeCliente,
                         Marketplace = marketplace,
                         JsonItens = pedidoNode.ToString(),
@@ -129,14 +166,76 @@ namespace SistemaConferenciaPedidos.Services
                         DataPrevisao = dataPedido
                     };
 
-                    pedidosImportados.Add(pedido);
+                    resultado.PedidosValidos.Add(pedido);
                 }
-
-                if (!encontrouPedidoNoPeriodo && paginaSoComDatasAntigas && pedidosImportados.Count > 0)
-                    break;
             }
 
-            return pedidosImportados;
+            if (modoBusca == ModoBuscaOmie.Rapida && !possuiPedidosAnterioresAData && resultado.UltimaPaginaConsultada > 1)
+            {
+                resultado.LimiteAtingido = true;
+            }
+
+            return resultado;
+        }
+
+        private async Task<string> FetchPageWithRetryAsync(int pagina, int totalPaginas, int pedidosAnalisados, Action<string> onProgress, System.Threading.CancellationToken cancellationToken, OmieService omieServiceLocal)
+        {
+            int tentativas = 0;
+            while (tentativas < 3)
+            {
+                tentativas++;
+                try
+                {
+                    if (onProgress != null)
+                    {
+                        if (totalPaginas == 0)
+                            onProgress($"Consultando página {pagina} — tentativa {tentativas}");
+                        else
+                            onProgress($"Consultando página {pagina} de {totalPaginas} — {pedidosAnalisados}/500 pedidos analisados");
+                    }
+                    
+                    string resposta;
+                    if (_omieServiceListarPedidosOverride != null)
+                        resposta = await _omieServiceListarPedidosOverride(pagina);
+                    else
+                        resposta = await omieServiceLocal.ListarPedidosAsync(pagina, cancellationToken);
+
+                    using var json = JsonDocument.Parse(resposta);
+                    if (json.RootElement.TryGetProperty("faultstring", out var faultNode))
+                    {
+                        string erro = faultNode.GetString() ?? "";
+                        if (erro.Contains("Já existe uma requisição desse método sendo executada"))
+                        {
+                            if (tentativas >= 3)
+                                throw new Exception($"A Omie não respondeu na página {pagina} após 3 tentativas.");
+
+                            int delaySeconds = tentativas == 1 ? 30 : 60;
+                            if (onProgress != null)
+                                onProgress($"A Omie ainda está processando a página {pagina}. Nova tentativa em {delaySeconds} segundos...");
+                            
+                            await Task.Delay(delaySeconds * 1000);
+                            continue;
+                        }
+                    }
+
+                    return resposta;
+                }
+                catch (TaskCanceledException)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        throw;
+
+                    if (tentativas >= 3)
+                        throw new Exception($"A Omie não respondeu na página {pagina} após 3 tentativas.");
+
+                    int delaySeconds = 30;
+                    if (onProgress != null)
+                        onProgress($"A Omie ainda está processando a página {pagina}. Nova tentativa em {delaySeconds} segundos...");
+                        
+                    await Task.Delay(delaySeconds * 1000);
+                }
+            }
+            return null;
         }
 
         private string LerValorComoTexto(JsonElement elemento)
