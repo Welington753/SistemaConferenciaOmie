@@ -12,12 +12,14 @@ namespace SistemaConferenciaPedidos.Services
     public class ImpressaoService
     {
         private readonly IPrinterEnvironment _printerEnvironment;
+        private readonly IPdfRendererService _pdfRendererService;
 
-        public ImpressaoService() : this(new WindowsPrinterEnvironment()) { }
+        public ImpressaoService() : this(new WindowsPrinterEnvironment(), new PdfRendererService()) { }
 
-        public ImpressaoService(IPrinterEnvironment printerEnvironment)
+        public ImpressaoService(IPrinterEnvironment printerEnvironment, IPdfRendererService pdfRendererService = null)
         {
             _printerEnvironment = printerEnvironment ?? new WindowsPrinterEnvironment();
+            _pdfRendererService = pdfRendererService ?? new PdfRendererService();
         }
 
         public ResultadoImpressao ImprimirZplComoImagem(string zpl)
@@ -190,7 +192,7 @@ namespace SistemaConferenciaPedidos.Services
 
             var resultado = ImprimirBitmapNaTermica(bitmapCortado);
             if (!resultado.Sucesso) return resultado;
-            
+
             return ResultadoImpressao.Ok("MercadoLivre_PDF", resultado.Impressora);
         }
 
@@ -209,7 +211,7 @@ namespace SistemaConferenciaPedidos.Services
                     return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Referência da Shopee inválida.");
 
                 string[] partesShopee = pedido.EtiquetaMarketplaceZpl.Split('|');
-                
+
                 if (partesShopee.Length < 3)
                     return ResultadoImpressao.Falha(StatusResultadoImpressao.ConteudoInvalido, "Formato da referência Shopee inválido.");
 
@@ -249,7 +251,7 @@ namespace SistemaConferenciaPedidos.Services
 
                 var resultado = ImprimirBitmapNaTermica(bitmapCortado);
                 if (!resultado.Sucesso) return resultado;
-                
+
                 return ResultadoImpressao.Ok("Shopee_PDF", resultado.Impressora);
             }
             catch (Exception ex)
@@ -265,23 +267,19 @@ namespace SistemaConferenciaPedidos.Services
             if (numeroPagina <= 0)
                 return null;
 
-            using var document = PdfiumViewer.PdfDocument.Load(caminhoPdf);
-
-            if (numeroPagina > document.PageCount)
+            try
+            {
+                using var pdfStream = File.OpenRead(caminhoPdf);
+                using UglyToad.PdfPig.PdfDocument pigDoc = UglyToad.PdfPig.PdfDocument.Open(pdfStream);
+                if (numeroPagina > pigDoc.NumberOfPages)
+                    return null;
+            }
+            catch
+            {
                 return null;
+            }
 
-            int largura = 1200;
-            int altura = 1800;
-
-            using var imagem = document.Render(
-                numeroPagina - 1,
-                largura,
-                altura,
-                300,
-                300,
-                PdfiumViewer.PdfRenderFlags.ForPrinting);
-
-            return new Bitmap(imagem);
+            return _pdfRendererService.RenderizarPagina(caminhoPdf, numeroPagina, 300);
         }
 
         private Bitmap CortarMargensBrancas(Bitmap original)
@@ -289,46 +287,85 @@ namespace SistemaConferenciaPedidos.Services
             if (original == null)
                 return null;
 
-            int esquerda = original.Width;
-            int topo = original.Height;
-            int direita = 0;
-            int baixo = 0;
-
-            for (int y = 0; y < original.Height; y++)
+            // Cria bitmap intermediário opaco (fundo branco) para tratar transparência corretamente.
+            // Pixels transparentes no original teriam r=g=b=0 no LockBits e seriam tratados como preto.
+            var opaco = new Bitmap(original.Width, original.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
             {
-                for (int x = 0; x < original.Width; x++)
+                using (var g = Graphics.FromImage(opaco))
                 {
-                    Color c = original.GetPixel(x, y);
+                    g.Clear(Color.White);
+                    g.DrawImage(original, 0, 0);
+                }
 
-                    bool ehBranco = c.R > 245 && c.G > 245 && c.B > 245;
+                int esquerda = opaco.Width;
+                int topo = opaco.Height;
+                int direita = 0;
+                int baixo = 0;
 
-                    if (!ehBranco)
+                System.Drawing.Imaging.BitmapData bmpData = opaco.LockBits(
+                    new Rectangle(0, 0, opaco.Width, opaco.Height),
+                    System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                try
+                {
+                    int bytes = Math.Abs(bmpData.Stride) * opaco.Height;
+                    byte[] rgbValues = new byte[bytes];
+                    System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, rgbValues, 0, bytes);
+
+                    int width = opaco.Width;
+                    int height = opaco.Height;
+                    int stride = bmpData.Stride;
+
+                    for (int y = 0; y < height; y++)
                     {
-                        if (x < esquerda) esquerda = x;
-                        if (y < topo) topo = y;
-                        if (x > direita) direita = x;
-                        if (y > baixo) baixo = y;
+                        for (int x = 0; x < width; x++)
+                        {
+                            int position = (y * stride) + (x * 4);
+                            byte b = rgbValues[position];
+                            byte g2 = rgbValues[position + 1];
+                            byte r = rgbValues[position + 2];
+
+                            bool ehBranco = r > 245 && g2 > 245 && b > 245;
+
+                            if (!ehBranco)
+                            {
+                                if (x < esquerda) esquerda = x;
+                                if (y < topo) topo = y;
+                                if (x > direita) direita = x;
+                                if (y > baixo) baixo = y;
+                            }
+                        }
                     }
                 }
+                finally
+                {
+                    opaco.UnlockBits(bmpData);
+                }
+
+                if (direita <= esquerda || baixo <= topo)
+                    return new Bitmap(opaco);
+
+                int margem = 10;
+
+                esquerda = Math.Max(0, esquerda - margem);
+                topo = Math.Max(0, topo - margem);
+                direita = Math.Min(opaco.Width - 1, direita + margem);
+                baixo = Math.Min(opaco.Height - 1, baixo + margem);
+
+                Rectangle area = new Rectangle(
+                    esquerda,
+                    topo,
+                    direita - esquerda + 1,
+                    baixo - topo + 1);
+
+                return opaco.Clone(area, opaco.PixelFormat);
             }
-
-            if (direita <= esquerda || baixo <= topo)
-                return new Bitmap(original);
-
-            int margem = 10;
-
-            esquerda = Math.Max(0, esquerda - margem);
-            topo = Math.Max(0, topo - margem);
-            direita = Math.Min(original.Width - 1, direita + margem);
-            baixo = Math.Min(original.Height - 1, baixo + margem);
-
-            Rectangle area = new Rectangle(
-                esquerda,
-                topo,
-                direita - esquerda + 1,
-                baixo - topo + 1);
-
-            return original.Clone(area, original.PixelFormat);
+            finally
+            {
+                opaco.Dispose();
+            }
         }
 
         public virtual ResultadoImpressao ImprimirBitmapNaTermica(Bitmap bitmap)

@@ -8,22 +8,22 @@ namespace SistemaConferenciaPedidos.Services
 {
     public class PedidoOmieService
     {
-        private readonly OmieService _omieService;
+        private readonly IOmiePedidoClient _omieClient;
 
-        public PedidoOmieService()
+        // Constructor for production that creates the real client using repo, allowing fake injection
+        public PedidoOmieService(IOmiePedidoClient? omieClient = null)
         {
             var config = new Repositories.ConfiguracaoRepositorySqlite();
             
-            string appKey = config.ObterValor("OmieAppKey", "3967066699596");
-            string appSecret = config.ObterValor("OmieAppSecret", "85e0d23541afa63e481e20c67e7a289d");
+            string appKey = config.ObterValor("OmieAppKey", "");
+            string appSecret = config.ObterValor("OmieAppSecret", "");
 
-            if (config.ObterValor("OmieAppKey") == "")
+            if (string.IsNullOrWhiteSpace(appKey) || string.IsNullOrWhiteSpace(appSecret))
             {
-                config.SalvarValor("OmieAppKey", appKey);
-                config.SalvarValor("OmieAppSecret", appSecret);
+                throw new InvalidOperationException("Credenciais Omie não configuradas.");
             }
 
-            _omieService = new OmieService(
+            _omieClient = omieClient ?? new OmiePedidoClient(
                 appKey,
                 appSecret,
                 "https://app.omie.com.br/api/v1/produtos/pedido/");
@@ -33,7 +33,7 @@ namespace SistemaConferenciaPedidos.Services
         {
             var pedidosImportados = new List<PedidoConferencia>();
 
-            string primeiraResposta = await _omieService.ListarPedidosAsync(1);
+            string primeiraResposta = await _omieClient.ListarPedidosAsync(1);
             using var primeiroJson = JsonDocument.Parse(primeiraResposta);
             var primeiroRoot = primeiroJson.RootElement;
 
@@ -41,19 +41,19 @@ namespace SistemaConferenciaPedidos.Services
                 throw new Exception("Erro da Omie: " + (faultInicial.GetString() ?? ""));
 
             if (!primeiroRoot.TryGetProperty("total_de_paginas", out var totalPaginasNode))
-                throw new Exception("Não foi possível identificar o total de páginas.");
+                throw new Exception("NÃ£o foi possÃ­vel identificar o total de pÃ¡ginas.");
 
             int totalPaginas = totalPaginasNode.GetInt32();
 
             for (int pagina = totalPaginas; pagina >= 1; pagina--)
             {
-                string resposta = await _omieService.ListarPedidosAsync(pagina);
+                string resposta = await _omieClient.ListarPedidosAsync(pagina);
 
                 using var json = JsonDocument.Parse(resposta);
                 var root = json.RootElement;
 
                 if (root.TryGetProperty("faultstring", out var faultNode))
-                    throw new Exception($"Erro da Omie na página {pagina}: {faultNode.GetString()}");
+                    throw new Exception($"Erro da Omie na pÃ¡gina {pagina}: {faultNode.GetString()}");
 
                 if (!root.TryGetProperty("pedido_venda_produto", out var pedidosNode))
                     continue;
@@ -191,3 +191,4 @@ namespace SistemaConferenciaPedidos.Services
         }
     }
 }
+

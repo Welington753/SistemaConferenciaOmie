@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SistemaConferenciaPedidos.csproj" />
+  <Project Path="tests\SistemaConferenciaPedidos.Tests\SistemaConferenciaPedidos.Tests.csproj" />
+</Solution>

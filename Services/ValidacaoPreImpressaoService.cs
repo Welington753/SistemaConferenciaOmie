@@ -11,15 +11,19 @@ using UglyToad.PdfPig;
 
 namespace SistemaConferenciaPedidos.Services
 {
-    public class ValidacaoPreImpressaoService
+    public class ValidacaoPreImpressaoService : IValidacaoPreImpressaoService
     {
         private readonly IPedidoRepository _pedidoRepository;
         private readonly EtiquetaService _etiquetaService;
+        private readonly IPdfRendererService _pdfRendererService;
+        private readonly IPdfTextProvider _pdfTextProvider;
 
-        public ValidacaoPreImpressaoService(IPedidoRepository pedidoRepository)
+        public ValidacaoPreImpressaoService(IPedidoRepository pedidoRepository, IPdfRendererService pdfRendererService = null, IPdfTextProvider pdfTextProvider = null)
         {
             _pedidoRepository = pedidoRepository;
             _etiquetaService = new EtiquetaService();
+            _pdfRendererService = pdfRendererService ?? new PdfRendererService();
+            _pdfTextProvider = pdfTextProvider ?? new PdfPigTextProvider();
         }
 
         public ResultadoValidacaoPreImpressao ValidarAntesDaImpressao(PedidoConferencia snapshotPedido, string caminhoZipShopee = null)
@@ -40,7 +44,7 @@ namespace SistemaConferenciaPedidos.Services
                 return ResultadoValidacaoPreImpressao.Falha("O pedido atual foi cancelado no banco.", "Cancelado no Banco");
 
             string etiqueta = snapshotPedido.EtiquetaMarketplaceZpl;
-            
+
             if (string.IsNullOrWhiteSpace(etiqueta))
                 return ResultadoValidacaoPreImpressao.Falha("Sem conteúdo ZPL ou PDF associado.", "Sem Etiqueta");
 
@@ -136,15 +140,12 @@ namespace SistemaConferenciaPedidos.Services
                             ms.Position = 0;
                             ms.CopyTo(msPdf);
                             msPdf.Position = 0;
-                            using var pdfDoc = PdfiumViewer.PdfDocument.Load(msPdf);
-                            int zeroBased = pageIdx - 1;
-                            if (zeroBased >= 0 && zeroBased < pdfDoc.PageCount)
+                            using var bmp = _pdfRendererService.RenderizarPagina(msPdf, pageIdx, 300);
+                            if (bmp != null)
                             {
-                                using var image = pdfDoc.Render(zeroBased, 300, 300, PdfiumViewer.PdfRenderFlags.Annotations);
                                 var reader = new ZXing.Windows.Compatibility.BarcodeReader();
                                 reader.Options.PossibleFormats = new[] { ZXing.BarcodeFormat.CODE_128 };
                                 reader.Options.TryHarder = true;
-                                using var bmp = new System.Drawing.Bitmap(image);
                                 var result = reader.Decode(bmp);
                                 if (result != null && result.Text.Contains(rastreioNormalizado))
                                 {
@@ -211,12 +212,9 @@ namespace SistemaConferenciaPedidos.Services
                 string textoPagina = "";
                 try
                 {
-                    using var document = PdfDocument.Open(pdfCaminho);
-                    if (paginaAlvo < 1 || paginaAlvo > document.NumberOfPages)
+                    textoPagina = _pdfTextProvider.ExtrairTexto(pdfCaminho, paginaAlvo);
+                    if (textoPagina == null)
                         return ResultadoValidacaoPreImpressao.Falha($"Página {paginaAlvo} não existe no PDF.", "Página Inexistente");
-
-                    var page = document.GetPage(paginaAlvo);
-                    textoPagina = page.Text ?? "";
                 }
                 catch (Exception ex)
                 {
@@ -247,7 +245,7 @@ namespace SistemaConferenciaPedidos.Services
 
                 if (codigoExtraido != codigoPedido)
                     return ResultadoValidacaoPreImpressao.Falha(
-                        $"O código extraído do PDF ({codigoExtraido}) não corresponde ao pedido ({codigoPedido}).",
+                        $"O código da etiqueta na página ({codigoExtraido}) não corresponde ao pedido ({codigoPedido}).",
                         "Código PDF Inválido");
             }
 
@@ -256,10 +254,10 @@ namespace SistemaConferenciaPedidos.Services
                 // ZPL puro (Amazon ou ML)
                 string numeroOriginal = (snapshotPedido.NumeroPedidoCliente ?? "").Trim();
                 string codigoRastreioOriginal = (snapshotPedido.CodigoEtiqueta ?? "").Trim();
-                
+
                 string numeroNormalizado = TextoHelper.NormalizarTexto(numeroOriginal);
                 string numeroSemCaracteres = TextoHelper.SomenteLetrasENumeros(numeroOriginal);
-                
+
                 string zplNormalizado = TextoHelper.NormalizarTexto(etiqueta);
                 string zplSemCaracteres = TextoHelper.SomenteLetrasENumeros(etiqueta);
 
@@ -276,7 +274,7 @@ namespace SistemaConferenciaPedidos.Services
                         // Tentar usar extração especializada
                         string zplDecodificado = _etiquetaService.DecodificarHexAmazon(etiqueta);
                         string zplDecodSemCaracteres = TextoHelper.SomenteLetrasENumeros(zplDecodificado);
-                        
+
                         if (zplDecodSemCaracteres.Contains(codigoRastreioSemCaracteres))
                             rastreioLocalizado = true;
                         else
@@ -296,7 +294,7 @@ namespace SistemaConferenciaPedidos.Services
                 {
                     string numeroSemPrefixo = numeroOriginal.Substring(5);
                     string numeroSemPrefixoSemCaracteres = TextoHelper.SomenteLetrasENumeros(numeroSemPrefixo);
-                    
+
                     if (zplSemCaracteres.Contains(numeroSemPrefixoSemCaracteres))
                         numeroLocalizado = true;
                     else

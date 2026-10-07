@@ -1,0 +1,27 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using SistemaConferenciaPedidos.Services;
+
+namespace SistemaConferenciaPedidos {
+    static class Program {
+        static async Task Main() {
+            try {
+                Console.WriteLine("Iniciando teste de conexao Omie (Clone GITHUB)...");
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                Console.WriteLine($"AppDomain.CurrentDomain.BaseDirectory: {baseDir}");
+                
+                var pedidoOmieService = new PedidoOmieService();
+                var res = await pedidoOmieService.BuscarPedidosAsync(DateTime.Now.AddDays(-1), DateTime.Now);
+                Console.WriteLine($"Resultado: {res.Count} pedidos listados.");
+            }
+            catch(Exception e) {
+                Console.WriteLine($"Erro: {e.Message}");
+                if (e.InnerException != null) Console.WriteLine($"Inner: {e.InnerException.Message}");
+            }
+            finally {
+                Console.Out.Flush();
+            }
+        }
+    }
+}

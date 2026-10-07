@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using SistemaConferenciaPedidos.Repositories;
@@ -20,16 +20,20 @@ namespace SistemaConferenciaPedidos
         private DateTimePicker dtpDataReset;
         
         private Button btnAlterarSenha;
+        private Label lblOmie;
+        private TextBox txtOmieAppKey;
+        private TextBox txtOmieAppSecret;
+        private Button btnSalvarOmie;
 
         public FrmAdministracao()
         {
-            Text = "Administração do Sistema";
+            Text = "AdministraÃ§Ã£o do Sistema";
             Size = new Size(400, 420);
             StartPosition = FormStartPosition.CenterScreen;
 
             lblInstrucao = new Label
             {
-                Text = "Número do Pedido para Ocultar/Remover:",
+                Text = "NÃºmero do Pedido para Ocultar/Remover:",
                 Location = new Point(20, 20),
                 AutoSize = true
             };
@@ -94,6 +98,17 @@ namespace SistemaConferenciaPedidos
             Controls.Add(dtpDataReset);
             Controls.Add(btnResetarBanco);
             Controls.Add(btnAlterarSenha);
+            lblOmie = new Label { Text = "Credenciais Omie:", Location = new Point(20, 160), AutoSize = true };
+            txtOmieAppKey = new TextBox { Location = new Point(20, 180), Width = 160, UseSystemPasswordChar = true };
+            txtOmieAppSecret = new TextBox { Location = new Point(190, 180), Width = 160, UseSystemPasswordChar = true };
+            btnSalvarOmie = new Button { Text = "Salvar Omie", Location = new Point(20, 210), Width = 120 };
+            
+            btnSalvarOmie.Click += BtnSalvarOmie_Click;
+
+            Controls.Add(lblOmie);
+            Controls.Add(txtOmieAppKey);
+            Controls.Add(txtOmieAppSecret);
+            Controls.Add(btnSalvarOmie);
             Controls.Add(lblEstatisticas);
 
             AtualizarEstatisticas();
@@ -113,6 +128,28 @@ namespace SistemaConferenciaPedidos
             }
         }
 
+                private void BtnSalvarOmie_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(txtOmieAppKey.Text) || string.IsNullOrWhiteSpace(txtOmieAppSecret.Text))
+            {
+                MessageBox.Show("Preencha App Key e App Secret.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
+                return;
+            
+            var config = new ConfiguracaoRepositorySqlite();
+            config.SalvarValor("OmieAppKey", txtOmieAppKey.Text);
+            config.SalvarValor("OmieAppSecret", txtOmieAppSecret.Text);
+            
+            var authService = new SistemaConferenciaPedidos.Services.AdminAuthService();
+            authService.RegistrarAcao("ALTERAR_CREDENCIAL_OMIE", "", "Credenciais atualizadas");
+            
+            MessageBox.Show("Credenciais atualizadas com sucesso.", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            txtOmieAppKey.Text = "";
+            txtOmieAppSecret.Text = "";
+        }
+
         private void AtualizarEstatisticas()
         {
             try
@@ -123,7 +160,7 @@ namespace SistemaConferenciaPedidos
             }
             catch (Exception ex)
             {
-                lblEstatisticas.Text = "Erro ao carregar estatísticas: " + ex.Message;
+                lblEstatisticas.Text = "Erro ao carregar estatÃ­sticas: " + ex.Message;
             }
         }
 
@@ -132,14 +169,14 @@ namespace SistemaConferenciaPedidos
             string numero = txtNumeroPedido.Text.Trim();
             if (string.IsNullOrWhiteSpace(numero))
             {
-                MessageBox.Show("Digite o número do pedido.");
+                MessageBox.Show("Digite o nÃºmero do pedido.");
                 return;
             }
 
             if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
                 return;
 
-            var confirm = MessageBox.Show($"Deseja realmente ocultar o pedido {numero}?", "Confirmação", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = MessageBox.Show($"Deseja realmente ocultar o pedido {numero}?", "ConfirmaÃ§Ã£o", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (confirm == DialogResult.Yes)
             {
                 try
@@ -156,7 +193,7 @@ namespace SistemaConferenciaPedidos
                     }
                     else
                     {
-                        MessageBox.Show("Pedido não encontrado ou já ocultado.");
+                        MessageBox.Show("Pedido nÃ£o encontrado ou jÃ¡ ocultado.");
                     }
                 }
                 catch (Exception ex)
@@ -195,10 +232,10 @@ namespace SistemaConferenciaPedidos
             if (!FrmSenhaAdministrativa.SolicitarAutorizacao(this))
                 return;
 
-            string motivo = FrmMotivoReimpressao.SolicitarMotivo(this); // Aproveitando o mesmo formulário para motivo
+            string motivo = FrmMotivoReimpressao.SolicitarMotivo(this); // Aproveitando o mesmo formulÃ¡rio para motivo
             if (string.IsNullOrWhiteSpace(motivo))
             {
-                MessageBox.Show("Operação cancelada (nenhum motivo fornecido).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("OperaÃ§Ã£o cancelada (nenhum motivo fornecido).", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -233,7 +270,7 @@ namespace SistemaConferenciaPedidos
 
         public FrmResetConfirmacao(DateTime data, int total, int impressos, int conferidos, int comEtiqueta, int comPdf, int reimpressoes, int removidos)
         {
-            Text = "Confirmação de Reset";
+            Text = "ConfirmaÃ§Ã£o de Reset";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -246,10 +283,10 @@ namespace SistemaConferenciaPedidos
                          $"Impressos: {impressos}\n" +
                          $"Conferidos: {conferidos}\n" +
                          $"Etiquetas vinculadas: {comEtiqueta}\n" +
-                         $"Referências PDF/ZIP: {comPdf}\n" +
-                         $"Reimpressões: {reimpressoes}\n" +
+                         $"ReferÃªncias PDF/ZIP: {comPdf}\n" +
+                         $"ReimpressÃµes: {reimpressoes}\n" +
                          $"Removidos: {removidos}\n\n" +
-                         "Outras datas não serão afetadas.";
+                         "Outras datas nÃ£o serÃ£o afetadas.";
 
             var lblMsg = new Label { Location = new Point(20, 20), Size = new Size(360, 220), Text = msg, Font = new Font(Font.FontFamily, 10) };
             
@@ -257,11 +294,11 @@ namespace SistemaConferenciaPedidos
             { 
                 Location = new Point(20, 260), 
                 Size = new Size(360, 25), 
-                Text = "Restaurar também pedidos removidos (ocultos) deste dia",
+                Text = "Restaurar tambÃ©m pedidos removidos (ocultos) deste dia",
                 Enabled = removidos > 0
             };
 
-            var btnNao = new Button { DialogResult = DialogResult.No, Location = new Point(210, 310), Size = new Size(80, 30), Text = "Não" };
+            var btnNao = new Button { DialogResult = DialogResult.No, Location = new Point(210, 310), Size = new Size(80, 30), Text = "NÃ£o" };
             var btnSim = new Button { DialogResult = DialogResult.Yes, Location = new Point(300, 310), Size = new Size(80, 30), Text = "Sim, resetar" };
 
             Controls.Add(lblMsg);
@@ -269,7 +306,7 @@ namespace SistemaConferenciaPedidos
             Controls.Add(btnNao);
             Controls.Add(btnSim);
 
-            AcceptButton = btnNao; // Padrão "Não"
+            AcceptButton = btnNao; // PadrÃ£o "NÃ£o"
             CancelButton = btnNao;
         }
     }
@@ -305,7 +342,7 @@ namespace SistemaConferenciaPedidos
             {
                 if (_txtSenha.Text != _txtConfirmarSenha.Text)
                 {
-                    MessageBox.Show("As senhas informadas não são iguais.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("As senhas informadas nÃ£o sÃ£o iguais.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 try
@@ -322,3 +359,4 @@ namespace SistemaConferenciaPedidos
         }
     }
 }
+
