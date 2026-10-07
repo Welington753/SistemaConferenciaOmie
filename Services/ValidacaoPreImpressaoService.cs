@@ -15,11 +15,13 @@ namespace SistemaConferenciaPedidos.Services
     {
         private readonly IPedidoRepository _pedidoRepository;
         private readonly EtiquetaService _etiquetaService;
+        private readonly IPdfRendererService _pdfRendererService;
 
-        public ValidacaoPreImpressaoService(IPedidoRepository pedidoRepository)
+        public ValidacaoPreImpressaoService(IPedidoRepository pedidoRepository, IPdfRendererService pdfRendererService = null)
         {
             _pedidoRepository = pedidoRepository;
             _etiquetaService = new EtiquetaService();
+            _pdfRendererService = pdfRendererService ?? new PdfRendererService();
         }
 
         public ResultadoValidacaoPreImpressao ValidarAntesDaImpressao(PedidoConferencia snapshotPedido, string caminhoZipShopee = null)
@@ -136,15 +138,12 @@ namespace SistemaConferenciaPedidos.Services
                             ms.Position = 0;
                             ms.CopyTo(msPdf);
                             msPdf.Position = 0;
-                            using var pdfDoc = PdfiumViewer.PdfDocument.Load(msPdf);
-                            int zeroBased = pageIdx - 1;
-                            if (zeroBased >= 0 && zeroBased < pdfDoc.PageCount)
+                            using var bmp = _pdfRendererService.RenderizarPagina(msPdf, pageIdx, 300);
+                            if (bmp != null)
                             {
-                                using var image = pdfDoc.Render(zeroBased, 300, 300, PdfiumViewer.PdfRenderFlags.Annotations);
                                 var reader = new ZXing.Windows.Compatibility.BarcodeReader();
                                 reader.Options.PossibleFormats = new[] { ZXing.BarcodeFormat.CODE_128 };
                                 reader.Options.TryHarder = true;
-                                using var bmp = new System.Drawing.Bitmap(image);
                                 var result = reader.Decode(bmp);
                                 if (result != null && result.Text.Contains(rastreioNormalizado))
                                 {

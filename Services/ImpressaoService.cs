@@ -12,12 +12,14 @@ namespace SistemaConferenciaPedidos.Services
     public class ImpressaoService
     {
         private readonly IPrinterEnvironment _printerEnvironment;
+        private readonly IPdfRendererService _pdfRendererService;
 
-        public ImpressaoService() : this(new WindowsPrinterEnvironment()) { }
+        public ImpressaoService() : this(new WindowsPrinterEnvironment(), new PdfRendererService()) { }
 
-        public ImpressaoService(IPrinterEnvironment printerEnvironment)
+        public ImpressaoService(IPrinterEnvironment printerEnvironment, IPdfRendererService pdfRendererService = null)
         {
             _printerEnvironment = printerEnvironment ?? new WindowsPrinterEnvironment();
+            _pdfRendererService = pdfRendererService ?? new PdfRendererService();
         }
 
         public ResultadoImpressao ImprimirZplComoImagem(string zpl)
@@ -265,23 +267,19 @@ namespace SistemaConferenciaPedidos.Services
             if (numeroPagina <= 0)
                 return null;
 
-            using var document = PdfiumViewer.PdfDocument.Load(caminhoPdf);
-
-            if (numeroPagina > document.PageCount)
+            try
+            {
+                using var pdfStream = File.OpenRead(caminhoPdf);
+                using UglyToad.PdfPig.PdfDocument pigDoc = UglyToad.PdfPig.PdfDocument.Open(pdfStream);
+                if (numeroPagina > pigDoc.NumberOfPages)
+                    return null;
+            }
+            catch
+            {
                 return null;
+            }
 
-            int largura = 1200;
-            int altura = 1800;
-
-            using var imagem = document.Render(
-                numeroPagina - 1,
-                largura,
-                altura,
-                300,
-                300,
-                PdfiumViewer.PdfRenderFlags.ForPrinting);
-
-            return new Bitmap(imagem);
+            return _pdfRendererService.RenderizarPagina(caminhoPdf, numeroPagina, 300);
         }
 
         private Bitmap CortarMargensBrancas(Bitmap original)
@@ -294,22 +292,45 @@ namespace SistemaConferenciaPedidos.Services
             int direita = 0;
             int baixo = 0;
 
-            for (int y = 0; y < original.Height; y++)
+            System.Drawing.Imaging.BitmapData bmpData = original.LockBits(
+                new Rectangle(0, 0, original.Width, original.Height),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            try
             {
-                for (int x = 0; x < original.Width; x++)
+                int bytes = Math.Abs(bmpData.Stride) * original.Height;
+                byte[] rgbValues = new byte[bytes];
+                System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, rgbValues, 0, bytes);
+
+                int width = original.Width;
+                int height = original.Height;
+                int stride = bmpData.Stride;
+
+                for (int y = 0; y < height; y++)
                 {
-                    Color c = original.GetPixel(x, y);
-
-                    bool ehBranco = c.R > 245 && c.G > 245 && c.B > 245;
-
-                    if (!ehBranco)
+                    for (int x = 0; x < width; x++)
                     {
-                        if (x < esquerda) esquerda = x;
-                        if (y < topo) topo = y;
-                        if (x > direita) direita = x;
-                        if (y > baixo) baixo = y;
+                        int position = (y * stride) + (x * 4);
+                        byte b = rgbValues[position];
+                        byte g = rgbValues[position + 1];
+                        byte r = rgbValues[position + 2];
+                        
+                        bool ehBranco = r > 245 && g > 245 && b > 245;
+
+                        if (!ehBranco)
+                        {
+                            if (x < esquerda) esquerda = x;
+                            if (y < topo) topo = y;
+                            if (x > direita) direita = x;
+                            if (y > baixo) baixo = y;
+                        }
                     }
                 }
+            }
+            finally
+            {
+                original.UnlockBits(bmpData);
             }
 
             if (direita <= esquerda || baixo <= topo)

@@ -11,13 +11,13 @@ namespace SistemaConferenciaPedidos.Services
 {
     public class MercadoLivrePdfService
     {
-        public List<EtiquetaMercadoLivrePdf> CarregarEtiquetas(
+        public (List<EtiquetaMercadoLivrePdf> Etiquetas, string CaminhoGerenciado) CarregarEtiquetas(
             string caminhoPdf)
         {
-            ValidarArquivo(caminhoPdf);
+            string caminhoGerenciado = ValidarECopiarArquivo(caminhoPdf);
 
             List<PaginaMercadoLivre> paginas =
-                LerPaginas(caminhoPdf);
+                LerPaginas(caminhoGerenciado);
 
             /*
              * SEGUNDA PASSAGEM
@@ -59,7 +59,7 @@ namespace SistemaConferenciaPedidos.Services
                 $"MELI - etiquetas com código: " +
                 $"{etiquetas.Count(e => !string.IsNullOrWhiteSpace(e.CodigoEtiqueta))}");
 
-            return etiquetas;
+            return (etiquetas, caminhoGerenciado);
         }
 
         /*
@@ -413,7 +413,7 @@ namespace SistemaConferenciaPedidos.Services
                 string.Empty);
         }
 
-        private void ValidarArquivo(string caminhoPdf)
+        private string ValidarECopiarArquivo(string caminhoPdf)
         {
             if (string.IsNullOrWhiteSpace(caminhoPdf))
             {
@@ -427,6 +427,45 @@ namespace SistemaConferenciaPedidos.Services
                     "O PDF do Mercado Livre não foi encontrado.",
                     caminhoPdf);
             }
+
+            var info = new FileInfo(caminhoPdf);
+            if (info.Length > 20 * 1024 * 1024)
+            {
+                throw new InvalidOperationException("O PDF excedeu o limite máximo de 20MB.");
+            }
+
+            using var fs = File.OpenRead(caminhoPdf);
+            byte[] header = new byte[4];
+            fs.Read(header, 0, 4);
+            var headerStr = System.Text.Encoding.ASCII.GetString(header);
+            if (!headerStr.StartsWith("%PDF"))
+            {
+                throw new InvalidOperationException("O arquivo fornecido não possui a assinatura válida de um PDF.");
+            }
+
+            fs.Position = 0;
+            using var doc = UglyToad.PdfPig.PdfDocument.Open(fs);
+            if (doc.NumberOfPages > 2000)
+            {
+                throw new InvalidOperationException("O PDF possui mais páginas do que o limite permitido (2000).");
+            }
+            
+            fs.Position = 0;
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            byte[] hashBytes = sha256.ComputeHash(fs);
+            string hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string managedDir = Path.Combine(appData, "SistemaConferenciaPedidos", "Etiquetas", "MercadoLivre");
+            Directory.CreateDirectory(managedDir);
+
+            string managedPath = Path.Combine(managedDir, $"{hashString}.pdf");
+            if (!File.Exists(managedPath))
+            {
+                File.Copy(caminhoPdf, managedPath);
+            }
+            
+            return managedPath;
         }
 
         private sealed class PaginaMercadoLivre

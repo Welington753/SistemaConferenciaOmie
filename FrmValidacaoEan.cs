@@ -18,6 +18,16 @@ namespace SistemaConferenciaPedidos
         }
 
         private readonly List<ItemValidacao> _itens;
+        private Button btnLiberacaoManual;
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal Func<IWin32Window, bool> FuncSolicitarAutorizacao { get; set; } = w => SistemaConferenciaPedidos.FrmSenhaAdministrativa.SolicitarAutorizacao(w);
+        
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal Func<IWin32Window, string> FuncSolicitarMotivo { get; set; } = w => SistemaConferenciaPedidos.FrmMotivoReimpressao.SolicitarMotivo(w);
+        
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal Action<string, string> ActionMostrarAviso { get; set; } = (msg, titulo) => MessageBox.Show(msg, titulo, MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
         public FrmValidacaoEan(IEnumerable<object> itens, string numeroPedido, string nomeCliente)
         {
@@ -46,6 +56,7 @@ namespace SistemaConferenciaPedidos
 
             lblTitulo.Text = $"Pedido: {numeroPedido}   |   Cliente: {nomeCliente}";
             AtualizarTela();
+            ConfigurarBtnLiberacaoManual();
         }
 
         protected override void OnShown(EventArgs e)
@@ -70,6 +81,7 @@ namespace SistemaConferenciaPedidos
 
         private void ReposicionarFocoPesquisa()
         {
+            if (!this.IsHandleCreated || this.IsDisposed || !this.Visible) return;
             BeginInvoke(new Action(() =>
             {
                 if (txtLeitura.Enabled && !txtLeitura.ReadOnly)
@@ -90,6 +102,57 @@ namespace SistemaConferenciaPedidos
             }
         }
 
+        private void ConfigurarBtnLiberacaoManual()
+        {
+            btnLiberacaoManual = new Button
+            {
+                Text = "Liberação Manual (Admin)",
+                Location = new System.Drawing.Point(20, this.ClientSize.Height - 40),
+                Width = 200,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            btnLiberacaoManual.Click += BtnLiberacaoManual_Click;
+            this.Controls.Add(btnLiberacaoManual);
+        }
+
+        private void BtnLiberacaoManual_Click(object sender, EventArgs e)
+        {
+            var pendentes = _itens.Where(x => !x.Conferido).ToList();
+            if (lstPendentes.SelectedIndex < 0 || lstPendentes.SelectedIndex >= pendentes.Count)
+            {
+                ActionMostrarAviso("Selecione um item pendente para liberação manual.", "Aviso");
+                return;
+            }
+
+            var itemSelecionado = pendentes[lstPendentes.SelectedIndex];
+
+            if (!FuncSolicitarAutorizacao(this))
+                return;
+
+            string motivo = FuncSolicitarMotivo(this);
+            if (string.IsNullOrWhiteSpace(motivo))
+            {
+                ActionMostrarAviso("Motivo é obrigatório para liberação manual.", "Aviso");
+                return;
+            }
+
+            var authService = new SistemaConferenciaPedidos.Services.AdminAuthService();
+            authService.RegistrarAcao("LIBERACAO_MANUAL_EAN", "", $"Motivo: {motivo} | EAN: {itemSelecionado.Ean} | Produto: {itemSelecionado.Produto}");
+
+            System.Media.SystemSounds.Asterisk.Play();
+            lstHistorico.Items.Insert(0, $"🔓 LIBERAÇÃO MANUAL: {itemSelecionado.Ean}");
+
+            itemSelecionado.Conferido = true;
+            AtualizarTela();
+
+            bool todosConferidos = _itens.All(x => x.Conferido);
+            if (todosConferidos)
+            {
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+        }
+
         private void btnConfirmar_Click(object sender, EventArgs e)
         {
             DialogResult = DialogResult.OK;
@@ -106,17 +169,6 @@ namespace SistemaConferenciaPedidos
             if (string.IsNullOrWhiteSpace(lido))
             {
                 ReposicionarFocoPesquisa();
-                return;
-            }
-
-            // SENHA / CÓDIGO DE LIBERAÇÃO MANUAL
-            if (lido == "0051000012517")
-            {
-                System.Media.SystemSounds.Asterisk.Play();
-                lstHistorico.Items.Insert(0, "🔓 LIBERAÇÃO MANUAL AUTORIZADA");
-
-                DialogResult = DialogResult.OK;
-                Close();
                 return;
             }
 
@@ -200,3 +252,4 @@ namespace SistemaConferenciaPedidos
         }
     }
 }
+

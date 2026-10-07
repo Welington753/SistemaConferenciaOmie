@@ -1,4 +1,4 @@
-﻿using SistemaConferenciaPedidos.Models;
+using SistemaConferenciaPedidos.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,17 +10,6 @@ namespace SistemaConferenciaPedidos.Services
         private readonly PedidoItemService _pedidoItemService;
 
 
-        public const string CodigoLiberacaoManual = "0051000012517";
-
-        public bool EhCodigoLiberacaoManual(string codigo)
-        {
-            if (string.IsNullOrWhiteSpace(codigo))
-                return false;
-
-            return codigo.Trim().Equals(
-                CodigoLiberacaoManual,
-                StringComparison.OrdinalIgnoreCase);
-        }
         public ValidacaoEanService()
         {
             _pedidoItemService = new PedidoItemService();

@@ -1,5 +1,4 @@
 using BinaryKits.Zpl.Viewer;
-using PdfiumViewer;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using SistemaConferenciaPedidos.Models;
@@ -804,7 +803,7 @@ namespace SistemaConferenciaPedidos
             CarregarPedidos();
         }
 
-        private void btnSalvarPedido_Click(object sender, EventArgs e)
+        private async void btnSalvarPedido_Click(object sender, EventArgs e)
         {
             using OpenFileDialog ofd = new OpenFileDialog();
 
@@ -823,7 +822,7 @@ namespace SistemaConferenciaPedidos
 
                 if (extensao.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    ImportarPdfMercadoLivre(ofd.FileName);
+                    await ImportarPdfMercadoLivreAsync(ofd.FileName);
                     return;
                 }
 
@@ -877,15 +876,17 @@ namespace SistemaConferenciaPedidos
             }
         }
 
-        private void ImportarPdfMercadoLivre(string caminhoPdf)
+        private async Task ImportarPdfMercadoLivreAsync(string caminhoPdf)
         {
             try
             {
                 _etiquetasMercadoLivrePdf.Clear();
-                // _caminhoPdfMercadoLivre = caminhoPdf;
 
-                var etiquetas =
-                    _mercadoLivrePdfService.CarregarEtiquetas(caminhoPdf);
+                var resultado = await Task.Run(() =>
+                    _mercadoLivrePdfService.CarregarEtiquetas(caminhoPdf));
+
+                var etiquetas = resultado.Etiquetas;
+                string caminhoGerenciado = resultado.CaminhoGerenciado;
 
                 _etiquetasMercadoLivrePdf.AddRange(etiquetas);
 
@@ -909,38 +910,22 @@ namespace SistemaConferenciaPedidos
                             p.Marketplace) == "MERCADO LIVRE")
                     .ToList();
 
-                /*
-                 * Ãndice por Venda.
-                 */
                 var etiquetasPorCodigo = _etiquetasMercadoLivrePdf
                     .Where(e => !string.IsNullOrWhiteSpace(e.CodigoEtiqueta) && SomenteNumeros(e.CodigoEtiqueta).Length == 11)
                     .GroupBy(e => SomenteNumeros(e.CodigoEtiqueta))
                     .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-                var etiquetasPorVenda =
+                var etiquetasPorVendaAgrupadas =
                     _etiquetasMercadoLivrePdf
-                        .Where(e =>
-                            SomenteNumeros(e.NumeroVenda).Length == 16)
-                        .GroupBy(e =>
-                            SomenteNumeros(e.NumeroVenda))
-                        .ToDictionary(
-                            grupo => grupo.Key,
-                            grupo => grupo.First(),
-                            StringComparer.OrdinalIgnoreCase);
+                        .Where(e => SomenteNumeros(e.NumeroVenda).Length == 16)
+                        .GroupBy(e => SomenteNumeros(e.NumeroVenda))
+                        .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-                /*
-                 * Ãndice por Pack ID.
-                 */
-                var etiquetasPorPackId =
+                var etiquetasPorPackIdAgrupadas =
                     _etiquetasMercadoLivrePdf
-                        .Where(e =>
-                            SomenteNumeros(e.PackId).Length == 16)
-                        .GroupBy(e =>
-                            SomenteNumeros(e.PackId))
-                        .ToDictionary(
-                            grupo => grupo.Key,
-                            grupo => grupo.First(),
-                            StringComparer.OrdinalIgnoreCase);
+                        .Where(e => SomenteNumeros(e.PackId).Length == 16)
+                        .GroupBy(e => SomenteNumeros(e.PackId))
+                        .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
                 int vinculadosPorVenda = 0;
                 int vinculadosPorPackId = 0;
@@ -959,8 +944,6 @@ namespace SistemaConferenciaPedidos
 
                     bool temCodigoSalvo = codigoAtual.Length == 11;
 
-                    // Se o pedido JÃ TEM cÃ³digo (11 dÃ­gitos), usamos ele para buscar a pÃ¡gina correta no PDF.
-                    // Isso evita cruzamento de pÃ¡ginas por erro na extraÃ§Ã£o do NumeroVenda.
                     if (temCodigoSalvo)
                     {
                         if (etiquetasPorCodigo.TryGetValue(codigoAtual, out var listaPorCodigo))
@@ -971,7 +954,7 @@ namespace SistemaConferenciaPedidos
                                 bool paginaEmUso = pedidos.Any(p => p != pedido && p.Marketplace == pedido.Marketplace && p.PaginaPdf == etiquetaUnica.Pagina);
                                 if (!paginaEmUso)
                                 {
-                                    pedido.CaminhoZipImportacao = caminhoPdf;
+                                    pedido.CaminhoZipImportacao = caminhoGerenciado;
                                     pedido.NomePdfNoZip = "";
                                     pedido.PaginaPdf = etiquetaUnica.Pagina;
                                     pedido.EtiquetaMarketplaceZpl = $"PDF_MELI|{etiquetaUnica.Pagina}";
@@ -985,9 +968,8 @@ namespace SistemaConferenciaPedidos
                         continue;
                     }
 
-                    // LÃ³gica para pedidos SEM CodigoEtiqueta (novos ou importados do Omie sem ZPL)
                     string numeroPedido =
-                        SomenteNumeros(pedido.NumeroPedidoCliente);
+                        SomenteNumeros(pedido.NumeroPedidoCliente);                    SomenteNumeros(pedido.NumeroPedidoCliente);
 
                     EtiquetaMercadoLivrePdf etiqueta = null;
                     bool encontrouPorVenda = false;
@@ -998,37 +980,50 @@ namespace SistemaConferenciaPedidos
                      * NÃºmero do pedido do Omie igual Ã  Venda.
                      */
                     if (numeroPedido.Length == 16 &&
-                        etiquetasPorVenda.TryGetValue(
-                            numeroPedido,
-                            out EtiquetaMercadoLivrePdf etiquetaVenda))
+                        etiquetasPorVendaAgrupadas.TryGetValue(numeroPedido, out var listaVenda))
                     {
-                        etiqueta = etiquetaVenda;
-                        encontrouPorVenda = true;
+                        if (listaVenda.Count == 1)
+                        {
+                            etiqueta = listaVenda[0];
+                            encontrouPorVenda = true;
+                        }
+                        else
+                        {
+                            pedido.Status = "PDF ambíguo";
+                            semCorrespondencia++;
+                            continue;
+                        }
                     }
 
-                    /*
-                     * Segunda tentativa:
-                     * NÃºmero do pedido do Omie igual ao Pack ID.
-                     */
                     if (etiqueta == null &&
                         numeroPedido.Length == 16 &&
-                        etiquetasPorPackId.TryGetValue(
-                            numeroPedido,
-                            out EtiquetaMercadoLivrePdf etiquetaPack))
+                        etiquetasPorPackIdAgrupadas.TryGetValue(numeroPedido, out var listaPack))
                     {
-                        etiqueta = etiquetaPack;
-                        encontrouPorPackId = true;
+                        if (listaPack.Count == 1)
+                        {
+                            etiqueta = listaPack[0];
+                            encontrouPorPackId = true;
+                        }
+                        else
+                        {
+                            pedido.Status = "PDF ambíguo";
+                            semCorrespondencia++;
+                            continue;
+                        }
                     }
 
                     if (etiqueta == null)
                     {
-                        semCorrespondencia++;
+                        if (pedido.Status != "PDF ambíguo")
+                        {
+                            semCorrespondencia++;
+                        }
                         continue;
                     }
 
                     pedido.EtiquetaMarketplaceZpl =
                         $"PDF_MELI|{etiqueta.Pagina}";
-                    pedido.CaminhoZipImportacao = caminhoPdf;
+                    pedido.CaminhoZipImportacao = caminhoGerenciado;
                     pedido.NomePdfNoZip = "";
                     pedido.PaginaPdf = etiqueta.Pagina;
 
