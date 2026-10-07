@@ -62,16 +62,36 @@ namespace SistemaConferenciaPedidos
             {
                 var pedidosValidos = ObterPedidosValidosDoModoAtual();
 
-                var pedido = pedidosValidos.FirstOrDefault(p =>
+                var pedidosEncontrados = pedidosValidos.Where(p =>
                     !string.IsNullOrWhiteSpace(p.CodigoEtiqueta) &&
-                    _conferenciaService.NormalizarCodigoConferencia(p.CodigoEtiqueta) == codigoNormalizado);
+                    _conferenciaService.NormalizarCodigoConferencia(p.CodigoEtiqueta) == codigoNormalizado).ToList();
 
-                if (pedido == null)
+                if (pedidosEncontrados.Count == 0)
                 {
-                    lstErros.Items.Insert(0, $"❌ NÃO ENCONTRADO: {textoLido}");
+                    var pedidoSemCodigo = pedidosValidos.FirstOrDefault(p =>
+                        string.IsNullOrWhiteSpace(p.CodigoEtiqueta) &&
+                        _conferenciaService.NormalizarNumeroPedido(p.NumeroPedidoCliente) == _conferenciaService.NormalizarNumeroPedido(textoLido));
+
+                    if (pedidoSemCodigo != null)
+                    {
+                        lstErros.Items.Insert(0, $"❌ Pedido sem código de etiqueta válido. Revise a vinculação. Diagnóstico: Id={pedidoSemCodigo.Id}, Pedido={pedidoSemCodigo.NumeroPedidoCliente}");
+                        Console.Beep(1500, 1500);
+                        return;
+                    }
+
+                    lstErros.Items.Insert(0, $"❌ Código de etiqueta não encontrado nesta data.");
                     Console.Beep(1500, 1500);
                     return;
                 }
+
+                if (pedidosEncontrados.Count > 1)
+                {
+                    lstErros.Items.Insert(0, $"❌ Código de etiqueta duplicado em mais de um pedido.");
+                    Console.Beep(1500, 1500);
+                    return;
+                }
+
+                var pedido = pedidosEncontrados[0];
 
                 if (pedido.Conferido)
                 {

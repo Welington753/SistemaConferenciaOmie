@@ -7,7 +7,7 @@ namespace SistemaConferenciaPedidos.Data
     public static class Database
     {
         private static readonly string PastaDados =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SistemaConferenciaPedidos", "Data");
 
         public static string CaminhoBanco =
             Path.Combine(PastaDados, "sistema_conferencia.db");
@@ -15,10 +15,49 @@ namespace SistemaConferenciaPedidos.Data
         public static string ConnectionString =>
             $"Data Source={CaminhoBanco}";
 
+        public static SqliteConnection GetConnection()
+        {
+            var connection = new SqliteConnection(ConnectionString);
+            connection.Open();
+            return connection;
+        }
+
         public static void Inicializar()
         {
             if (!Directory.Exists(PastaDados))
                 Directory.CreateDirectory(PastaDados);
+
+            if (!File.Exists(CaminhoBanco))
+            {
+                string caminhoAntigo = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "sistema_conferencia.db");
+                if (File.Exists(caminhoAntigo))
+                {
+                    try
+                    {
+                        SqliteConnection.ClearAllPools();
+                        
+                        string pastaBackup = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "Backup_Migracao");
+                        if (!Directory.Exists(pastaBackup)) Directory.CreateDirectory(pastaBackup);
+                        
+                        string arquivoBackup = Path.Combine(pastaBackup, $"sistema_conferencia_{DateTime.Now:yyyyMMdd_HHmmss}.db");
+                        File.Copy(caminhoAntigo, arquivoBackup, true);
+                        
+                        File.Copy(caminhoAntigo, CaminhoBanco, false);
+                        
+                        string walAntigo = caminhoAntigo + "-wal";
+                        if (File.Exists(walAntigo)) File.Copy(walAntigo, CaminhoBanco + "-wal", false);
+                        
+                        string shmAntigo = caminhoAntigo + "-shm";
+                        if (File.Exists(shmAntigo)) File.Copy(shmAntigo, CaminhoBanco + "-shm", false);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (File.Exists(CaminhoBanco)) File.Delete(CaminhoBanco);
+                        System.Windows.Forms.MessageBox.Show($"Falha na migração do banco de dados.\nOrigem: {caminhoAntigo}\nDestino: {CaminhoBanco}\nErro: {ex.Message}", "Erro de Migração", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+            }
 
             using var connection = new SqliteConnection(ConnectionString);
             connection.Open();

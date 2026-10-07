@@ -905,124 +905,73 @@ namespace SistemaConferenciaPedidos
                     return;
                 }
 
-                var pedidos =
-                    _pedidoRepository.ObterTodos().ToList();
+                var dataInicio = dtpDataInicial.Value.Date;
+                var dataFim = dtpDataFinal.Value.Date.AddDays(1);
+                var pedidos = _pedidoRepository.ObterPorPeriodo(dataInicio, dataFim).ToList();
 
                 var pedidosMercadoLivre = pedidos
                     .Where(p =>
                         MarketplaceHelper.NormalizarMarketplace(
-                            p.Marketplace) == "MERCADO LIVRE")
+                            p.Marketplace) == "MERCADO LIVRE" && p.Status != "Cancelado" && p.Status != "Oculto")
                     .ToList();
 
-                /*
-                 * Ã ndice por Venda.
-                 */
-                var etiquetasPorCodigo = _etiquetasMercadoLivrePdf
-                    .Where(e => !string.IsNullOrWhiteSpace(e.CodigoEtiqueta) && SomenteNumeros(e.CodigoEtiqueta).Length == 11)
-                    .GroupBy(e => SomenteNumeros(e.CodigoEtiqueta))
-                    .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+                var etiquetasPorVenda = _etiquetasMercadoLivrePdf
+                    .Where(e => SomenteNumeros(e.NumeroVenda).Length == 16)
+                    .GroupBy(e => SomenteNumeros(e.NumeroVenda))
+                    .ToDictionary(
+                        grupo => grupo.Key,
+                        grupo => grupo.ToList(),
+                        StringComparer.OrdinalIgnoreCase);
 
-                var etiquetasPorVenda =
-                    _etiquetasMercadoLivrePdf
-                        .Where(e =>
-                            SomenteNumeros(e.NumeroVenda).Length == 16)
-                        .GroupBy(e =>
-                            SomenteNumeros(e.NumeroVenda))
-                        .ToDictionary(
-                            grupo => grupo.Key,
-                            grupo => grupo.First(),
-                            StringComparer.OrdinalIgnoreCase);
+                var etiquetasPorPackId = _etiquetasMercadoLivrePdf
+                    .Where(e => SomenteNumeros(e.PackId).Length == 16)
+                    .GroupBy(e => SomenteNumeros(e.PackId))
+                    .ToDictionary(
+                        grupo => grupo.Key,
+                        grupo => grupo.ToList(),
+                        StringComparer.OrdinalIgnoreCase);
 
-                /*
-                 * Ã ndice por Pack ID.
-                 */
-                var etiquetasPorPackId =
-                    _etiquetasMercadoLivrePdf
-                        .Where(e =>
-                            SomenteNumeros(e.PackId).Length == 16)
-                        .GroupBy(e =>
-                            SomenteNumeros(e.PackId))
-                        .ToDictionary(
-                            grupo => grupo.Key,
-                            grupo => grupo.First(),
-                            StringComparer.OrdinalIgnoreCase);
-
-                int vinculadosPorVenda = 0;
-                int vinculadosPorPackId = 0;
                 int jaVinculados = 0;
-                int semCodigo = 0;
+                int analisados = pedidosMercadoLivre.Count;
+                int vinculadosCriados = 0;
                 int semCorrespondencia = 0;
-                int vinculadosPorCodigo = 0;
+                int ambiguos = 0;
 
                 foreach (var pedido in pedidosMercadoLivre)
                 {
-                    string referenciaAtual =
-                        pedido.EtiquetaMarketplaceZpl ?? string.Empty;
+                    var pedidoDb = _pedidoRepository.ObterPorId(pedido.Id);
+                    if (pedidoDb == null) continue;
 
-                    string codigoAtual =
-                        SomenteNumeros(pedido.CodigoEtiqueta);
+                    bool jaTemEtiquetaCompleta = !string.IsNullOrWhiteSpace(pedidoDb.CodigoEtiqueta) &&
+                        (!string.IsNullOrWhiteSpace(pedidoDb.EtiquetaMarketplaceZpl) || 
+                        (pedidoDb.PaginaPdf > 0 && !string.IsNullOrWhiteSpace(pedidoDb.CaminhoZipImportacao)));
 
-                    bool temCodigoSalvo = codigoAtual.Length == 11;
-
-                    // Se o pedido JÃ  TEM cÃ³digo (11 dÃ­gitos), usamos ele para buscar a pÃ¡gina correta no PDF.
-                    // Isso evita cruzamento de pÃ¡ginas por erro na extraÃ§Ã£o do NumeroVenda.
-                    if (temCodigoSalvo)
+                    if (jaTemEtiquetaCompleta)
                     {
-                        if (etiquetasPorCodigo.TryGetValue(codigoAtual, out var listaPorCodigo))
-                        {
-                            if (listaPorCodigo.Count == 1)
-                            {
-                                var etiquetaUnica = listaPorCodigo[0];
-                                bool paginaEmUso = pedidos.Any(p => p != pedido && p.Marketplace == pedido.Marketplace && p.PaginaPdf == etiquetaUnica.Pagina);
-                                if (!paginaEmUso)
-                                {
-                                    pedido.CaminhoZipImportacao = caminhoPdf;
-                                    pedido.NomePdfNoZip = "";
-                                    pedido.PaginaPdf = etiquetaUnica.Pagina;
-                                    pedido.EtiquetaMarketplaceZpl = $"PDF_MELI|{etiquetaUnica.Pagina}";
-                                    pedido.Status = "Etiqueta vinculada";
-                                    vinculadosPorCodigo++;
-                                }
-                            }
-                        }
-                        
                         jaVinculados++;
                         continue;
                     }
 
-                    // LÃ³gica para pedidos SEM CodigoEtiqueta (novos ou importados do Omie sem ZPL)
-                    string numeroPedido =
-                        SomenteNumeros(pedido.NumeroPedidoCliente);
-
+                    string numeroPedido = SomenteNumeros(pedidoDb.NumeroPedidoCliente);
                     EtiquetaMercadoLivrePdf etiqueta = null;
-                    bool encontrouPorVenda = false;
-                    bool encontrouPorPackId = false;
+                    bool ambiguo = false;
 
-                    /*
-                     * Primeira tentativa:
-                     * NÃºmero do pedido do Omie igual Ã  Venda.
-                     */
-                    if (numeroPedido.Length == 16 &&
-                        etiquetasPorVenda.TryGetValue(
-                            numeroPedido,
-                            out EtiquetaMercadoLivrePdf etiquetaVenda))
+                    if (numeroPedido.Length == 16 && etiquetasPorVenda.TryGetValue(numeroPedido, out var listaVenda))
                     {
-                        etiqueta = etiquetaVenda;
-                        encontrouPorVenda = true;
+                        if (listaVenda.Count == 1) etiqueta = listaVenda[0];
+                        else ambiguo = true;
                     }
 
-                    /*
-                     * Segunda tentativa:
-                     * NÃºmero do pedido do Omie igual ao Pack ID.
-                     */
-                    if (etiqueta == null &&
-                        numeroPedido.Length == 16 &&
-                        etiquetasPorPackId.TryGetValue(
-                            numeroPedido,
-                            out EtiquetaMercadoLivrePdf etiquetaPack))
+                    if (etiqueta == null && !ambiguo && numeroPedido.Length == 16 && etiquetasPorPackId.TryGetValue(numeroPedido, out var listaPack))
                     {
-                        etiqueta = etiquetaPack;
-                        encontrouPorPackId = true;
+                        if (listaPack.Count == 1) etiqueta = listaPack[0];
+                        else ambiguo = true;
+                    }
+
+                    if (ambiguo)
+                    {
+                        ambiguos++;
+                        continue;
                     }
 
                     if (etiqueta == null)
@@ -1031,71 +980,49 @@ namespace SistemaConferenciaPedidos
                         continue;
                     }
 
-                    pedido.EtiquetaMarketplaceZpl =
-                        $"PDF_MELI|{etiqueta.Pagina}";
-                    pedido.CaminhoZipImportacao = caminhoPdf;
-                    pedido.NomePdfNoZip = "";
-                    pedido.PaginaPdf = etiqueta.Pagina;
-
-                    string codigoEncontrado =
-                        SomenteNumeros(etiqueta.CodigoEtiqueta);
-
-                    if (codigoEncontrado.Length != 11)
+                    bool paginaEmUso = pedidosMercadoLivre.Any(p => p.Id != pedidoDb.Id && p.PaginaPdf == etiqueta.Pagina && !string.IsNullOrWhiteSpace(p.EtiquetaMarketplaceZpl) && p.EtiquetaMarketplaceZpl.Contains("PDF_MELI"));
+                    if (paginaEmUso)
                     {
-                        pedido.CodigoEtiqueta = string.Empty;
-
-                        pedido.Status =
-                            "PDF encontrado - cÃ³digo nÃ£o identificado";
-
-                        semCodigo++;
+                        semCorrespondencia++;
                         continue;
                     }
 
-                    pedido.CodigoEtiqueta =
-                        codigoEncontrado;
+                    pedidoDb.EtiquetaMarketplaceZpl = $"PDF_MELI|{etiqueta.Pagina}";
+                    pedidoDb.CaminhoZipImportacao = caminhoPdf;
+                    pedidoDb.NomePdfNoZip = "";
+                    pedidoDb.PaginaPdf = etiqueta.Pagina;
 
-                    pedido.Status =
-                        "Etiqueta vinculada";
+                    string codigoEncontrado = SomenteNumeros(etiqueta.CodigoEtiqueta);
+                    if (codigoEncontrado.Length != 11)
+                    {
+                        pedidoDb.CodigoEtiqueta = string.Empty;
+                        pedidoDb.Status = "PDF encontrado - código não identificado";
+                    }
+                    else
+                    {
+                        pedidoDb.CodigoEtiqueta = codigoEncontrado;
+                        pedidoDb.Status = "Etiqueta vinculada";
+                    }
 
-                    if (encontrouPorVenda)
-                        vinculadosPorVenda++;
-                    else if (encontrouPorPackId)
-                        vinculadosPorPackId++;
+                    _pedidoRepository.SalvarOuAtualizar(pedidoDb);
+                    vinculadosCriados++;
                 }
 
-                _pedidoRepository
-                    .SalvarOuAtualizarVarios(pedidos);
+                CarregarPedidos(_pedidoSelecionado?.NumeroPedidoCliente);
 
-                CarregarPedidos(
-                    _pedidoSelecionado?.NumeroPedidoCliente);
+                int paginasSemPedido = _etiquetasMercadoLivrePdf.Count - vinculadosCriados;
+                if (paginasSemPedido < 0) paginasSemPedido = 0;
 
-                int etiquetasComVenda =
-                    _etiquetasMercadoLivrePdf.Count(e =>
-                        SomenteNumeros(e.NumeroVenda).Length == 16);
+                string resumo = $"Data operacional: {dtpDataInicial.Value.Date:dd/MM/yyyy}\n\n" +
+                                $"Pedidos já vinculados e preservados: {jaVinculados}\n" +
+                                $"Pedidos faltantes analisados: {analisados}\n" +
+                                $"Novos vínculos criados: {vinculadosCriados}\n" +
+                                $"Ignorados por já possuírem etiqueta: {jaVinculados}\n" +
+                                $"Sem correspondência: {semCorrespondencia}\n" +
+                                $"Ambíguos: {ambiguos}\n" +
+                                $"Páginas sem pedido: {paginasSemPedido}";
 
-                int etiquetasComPackId =
-                    _etiquetasMercadoLivrePdf.Count(e =>
-                        SomenteNumeros(e.PackId).Length == 16);
-
-                int etiquetasComCodigo =
-                    _etiquetasMercadoLivrePdf.Count(e =>
-                        SomenteNumeros(e.CodigoEtiqueta).Length == 11);
-
-                MessageBox.Show(
-                    $"PDF do Mercado Livre importado!\n\n" +
-                    $"PÃ¡ginas de etiqueta encontradas: " +
-                    $"{_etiquetasMercadoLivrePdf.Count}\n" +
-                    $"Etiquetas com Venda: {etiquetasComVenda}\n" +
-                    $"Etiquetas com Pack ID: {etiquetasComPackId}\n" +
-                    $"Etiquetas com cÃ³digo vÃ¡lido: {etiquetasComCodigo}\n\n" +
-                    $"Vinculados pela Venda: {vinculadosPorVenda}\n" +
-                    $"Vinculados pelo Pack ID: {vinculadosPorPackId}\n" +
-                    $"JÃ¡ tinham etiqueta completa: {jaVinculados}\n" +
-                    $"PDF encontrado, mas sem cÃ³digo: {semCodigo}\n" +
-                    $"Pedidos sem correspondÃªncia: {semCorrespondencia}",
-                    "PDF Mercado Livre",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                MessageBox.Show(resumo, "PDF Mercado Livre", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -2048,7 +1975,6 @@ namespace SistemaConferenciaPedidos
 
                 btnBuscarPedidos.Text = "Atualizando grade...";
                 CarregarPedidos();
-                System.IO.File.AppendAllText(@"c:\temp\diag.txt", "7. grade atualizada\n");
 
                 var bancoDepois = _pedidoRepository.ObterTodos()
                     .Where(p => (p.DataPrevisao.HasValue && p.DataPrevisao.Value.Date >= dataInicial.Date && p.DataPrevisao.Value.Date <= dataFinal.Date)
